@@ -1,0 +1,45 @@
+﻿# .NET Backend
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+[Ll]ogs/
+.vs/
+*.user
+*.suo
+TestResults/
+
+# React / Node.js
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+coverage/
+**/coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+secrets.json
+**/secrets.json
+*.pfx
+*.p12
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and databases
+*.log
+*.db
+*.sqlite
+
+# NuGet
+*.nupkg
