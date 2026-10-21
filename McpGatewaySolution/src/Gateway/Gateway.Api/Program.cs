@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
  
 using Gateway.Api.Configuration;
 using Gateway.Api.Data;
@@ -8,10 +5,13 @@ using Gateway.Api.Endpoints;
 using Gateway.Api.Infrastructure;
 using Gateway.Api.Services;
 using Gateway.Api.Tools;
-
 using Gateway.Core.Abstractions;
 using Gateway.Core.Entities;
 using Gateway.Core.Policies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -74,6 +74,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<ICookieWriter, CookieWriter>();
 builder.Services.AddSingleton<IToolPermissionPolicy, ScopeBasedToolPermissionPolicy>();
 builder.Services.AddSingleton<IToolAuditLogger, InMemoryToolAuditLogger>();
+builder.Services.AddHttpContextAccessor();
 
 var taskServiceUrl = builder.Configuration["services:taskservice:http:0"]
     ?? "http://localhost:5001";
@@ -96,10 +97,15 @@ builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
 var app = builder.Build();
 
+//using (var scope = app.Services.CreateScope())
+//{
+//    var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
+//    await db.Database.EnsureCreatedAsync();
+//}
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
-    await db.Database.EnsureCreatedAsync();
+    await db.Database.MigrateAsync();
 }
 
 app.UseCors("Client");

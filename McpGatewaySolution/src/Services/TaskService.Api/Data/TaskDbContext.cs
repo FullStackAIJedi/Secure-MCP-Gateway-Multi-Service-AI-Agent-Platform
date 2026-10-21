@@ -14,6 +14,7 @@
                 entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(2000);
                 entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => e.OwnerSubjectId);
             });
         }
     }
@@ -25,5 +26,6 @@
         public string Description { get; set; } = string.Empty;
         public bool IsComplete { get; set; }
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+        public string OwnerSubjectId { get; set; } = string.Empty;
     }
 }

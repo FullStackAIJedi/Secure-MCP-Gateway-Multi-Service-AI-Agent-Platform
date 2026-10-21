@@ -1,12 +1,12 @@
 ﻿namespace Gateway.Core.Policies
 {
-    using Gateway.Core.Abstractions; 
+    using Gateway.Core.Abstractions;
 
     public sealed class ScopeBasedToolPermissionPolicy : IToolPermissionPolicy
     {
         private static readonly Dictionary<string, HashSet<string>> ScopeToolMap = new()
         {
-            ["mcp.tools.read"] = ["list_tasks", "get_task", "search_documents", "get_document"],
+            ["mcp.tools.read"] = ["list_tasks", "get_task", "search_tasks", "search_documents", "get_document"],
             ["mcp.tools.write"] = ["create_task", "complete_task", "add_document"],
             ["mcp.tools.admin"] = ["delete_task", "delete_document"]
         };

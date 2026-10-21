@@ -14,11 +14,11 @@ builder.Services.AddMcpServer()
     .WithTools<DocumentTools>();
 
 var app = builder.Build();
-
+ 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<DocumentDbContext>();
-    await db.Database.EnsureCreatedAsync();
+    await db.Database.MigrateAsync();
 }
 
 app.MapHealthChecks("/health");

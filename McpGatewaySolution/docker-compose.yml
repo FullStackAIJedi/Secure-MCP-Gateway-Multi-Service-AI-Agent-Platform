@@ -10,6 +10,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - mcp-postgres-data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
@@ -73,6 +74,22 @@ services:
       taskservice:
         condition: service_started
       documentservice:
+        condition: service_started
+
+  agent:
+    build:
+      context: .
+      dockerfile: src/Agent/Agent.Api/Dockerfile
+    container_name: mcp-agent
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      Ollama__BaseUrl: ${OLLAMA_BASE_URL}
+      Ollama__Model: ${OLLAMA_MODEL}
+      Gateway__McpUrl: ${AGENT_GATEWAY_URL}
+    ports:
+      - "${AGENT_PORT}:8080"
+    depends_on:
+      gateway:
         condition: service_started
 
 volumes:

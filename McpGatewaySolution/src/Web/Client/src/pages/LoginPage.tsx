@@ -5,17 +5,14 @@ import { useLoginMutation } from "../hooks/useAuth";
 import { Button } from "../components/ui/Button";
 
 const Container = styled.div`
-  max-width: 400px;
-  margin: 80px auto;
-  padding: 32px;
-  border: 1px solid black;
-  border-radius: 8px;
+  max-width: 300px;
+  margin: 150px auto;
 `;
 
 const Title = styled.h1`
   margin: 0 0 24px;
   font-size: 1.5rem;
-  color: black;
+  color: white;
 `;
 
 const Form = styled.form`
@@ -25,10 +22,9 @@ const Form = styled.form`
 `;
 
 const Input = styled.input`
-  width: 100%;
   padding: 10px;
   border: 1px solid black;
-  border-radius: 4px;
+  border-radius: 9px;
   font-size: 1rem;
 `;
 
@@ -42,11 +38,20 @@ const Footer = styled.p`
   margin: 16px 0 0;
   text-align: center;
   font-size: 0.875rem;
-  color: #666;
+  color: white;
+`;
 
-  a {
-    color: black;
-    text-decoration: none;
+const StyledLink = styled(Link)`
+  color: white;
+  font-weight: 500;
+  padding-left: 7px;
+  text-decoration: none;
+  transition: color 0.2s ease;
+
+  &:hover {
+    text-decoration: underline;
+    text-decoration-color: white;
+    text-underline-offset: 10px;
   }
 `;
 
@@ -95,7 +100,7 @@ export function LoginPage() {
         </Button>
       </Form>
       <Footer>
-        Don't have an account? <Link to="/register">Create one</Link>
+        First time here? <StyledLink to="/register">Sign Up</StyledLink>
       </Footer>
     </Container>
   );

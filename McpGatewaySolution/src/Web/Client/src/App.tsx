@@ -1,11 +1,18 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
+import { NavBar } from "./components/NavBar";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
 import { TasksPage } from "./pages/TasksPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
-import { RegisterPage } from "./pages/RegisterPage";
+import { ChatPage } from "./pages/ChatPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,6 +23,15 @@ const queryClient = new QueryClient({
   },
 });
 
+function AppLayout() {
+  return (
+    <>
+      <NavBar />
+      <Outlet />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -23,10 +39,15 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+
           <Route element={<ProtectedRoute />}>
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/documents" element={<DocumentsPage />} />
+            <Route element={<AppLayout />}>
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/documents" element={<DocumentsPage />} />
+              <Route path="/chat" element={<ChatPage />} />
+            </Route>
           </Route>
+
           <Route path="*" element={<Navigate to="/tasks" replace />} />
         </Routes>
       </BrowserRouter>

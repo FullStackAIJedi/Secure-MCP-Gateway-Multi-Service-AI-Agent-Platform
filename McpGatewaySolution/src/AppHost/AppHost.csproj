@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Agent\Agent.Api\Agent.Api.csproj" />
     <ProjectReference Include="..\Gateway\Gateway.Api\Gateway.Api.csproj" />
     <ProjectReference Include="..\Services\DocumentService.Api\DocumentService.Api.csproj" />
     <ProjectReference Include="..\Services\TaskService.Api\TaskService.Api.csproj" />

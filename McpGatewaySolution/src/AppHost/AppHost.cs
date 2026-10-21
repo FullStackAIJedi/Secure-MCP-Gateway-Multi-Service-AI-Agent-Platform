@@ -27,4 +27,6 @@ builder.AddViteApp("client", "../Web/Client")
     .WithHttpEndpoint(port: 5173, env: "PORT")
     .PublishAsDockerFile();
 
+builder.AddProject<Projects.Agent_Api>("agent-api");
+
 builder.Build().Run();

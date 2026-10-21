@@ -1,12 +1,10 @@
 ﻿namespace Gateway.Api.Endpoints
 {
-    using System.Security.Claims;
-
-    using Microsoft.AspNetCore.Mvc;
-    using Microsoft.AspNetCore.Antiforgery;
-
     using Gateway.Api.Infrastructure;
     using Gateway.Api.Services; 
+    using Microsoft.AspNetCore.Antiforgery;
+    using Microsoft.AspNetCore.Mvc;
+    using System.Security.Claims;
  
     public static class AuthEndpoints
     {
@@ -29,6 +27,33 @@
             group.MapGet("/me", Me)
                 .RequireAuthorization()
                 .WithName("Me");
+
+            //group.MapPost("/agent-token", (IAuthService authService) =>
+            //{
+            //    var user = new AuthUserResponse("agent-service", "agent@system.local");
+            //    var token = authService.GenerateTokenFor(user);
+            //    return Results.Ok(new { accessToken = token });
+            //}).AllowAnonymous();
+            //group.MapPost("/agent-token", (string? email, IAuthService authService) =>
+            //{
+            //    var userEmail = email ?? "sekul.net@gmail.com";
+            //    var subjectId = $"user-{userEmail.GetHashCode():x}";
+            //    var user = new AuthUserResponse(subjectId, userEmail);
+            //    var token = authService.GenerateTokenFor(user);
+            //    return Results.Ok(new { accessToken = token });
+            //}).AllowAnonymous();
+            group.MapPost("/agent-token", (HttpContext context, Data.UserDbContext db, IAuthService authService) =>
+            {
+                var subjectId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var email = context.User.FindFirst(ClaimTypes.Email)?.Value;
+
+                if (subjectId is null || email is null)
+                    return Results.Unauthorized();
+
+                var authUser = new AuthUserResponse(subjectId, email);
+                var token = authService.GenerateTokenFor(authUser);
+                return Results.Ok(new { accessToken = token });
+            }).RequireAuthorization();
         }
 
         private static IResult Register(
@@ -80,5 +105,7 @@
             if (subjectId is null) return Results.Unauthorized();
             return Results.Ok(new AuthUserResponse(subjectId, email ?? string.Empty));
         }
+
+
     }
 }
