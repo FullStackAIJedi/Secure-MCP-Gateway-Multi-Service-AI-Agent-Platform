@@ -1,17 +1,19 @@
- 
+
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
 using Gateway.Api.Configuration;
 using Gateway.Api.Data;
 using Gateway.Api.Endpoints;
 using Gateway.Api.Infrastructure;
 using Gateway.Api.Services;
 using Gateway.Api.Tools;
+
 using Gateway.Core.Abstractions;
 using Gateway.Core.Entities;
 using Gateway.Core.Policies;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,11 +32,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer();
 
 builder.Services.ConfigureOptions<JwtBearerOptionsSetup>();
-
-//builder.Services.AddAuthorizationBuilder()
-//    .AddPolicy("mcp.read", policy => policy.RequireClaim("scope", "mcp.tools.read"))
-//    .AddPolicy("mcp.write", policy => policy.RequireClaim("scope", "mcp.tools.write"))
-//    .AddPolicy("mcp.admin", policy => policy.RequireClaim("scope", "mcp.tools.admin"));
+ 
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("mcp.read", policy => policy.RequireAssertion(context =>
         context.User.HasClaim(c =>
@@ -96,12 +94,7 @@ builder.AddNpgsqlDbContext<UserDbContext>("userdb");
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
 var app = builder.Build();
-
-//using (var scope = app.Services.CreateScope())
-//{
-//    var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
-//    await db.Database.EnsureCreatedAsync();
-//}
+ 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
@@ -123,3 +116,5 @@ app.MapGatewayEndpoints();
 app.MapMcp("/mcp").RequireAuthorization("mcp.read");
 
 app.Run();
+
+public partial class Program { }

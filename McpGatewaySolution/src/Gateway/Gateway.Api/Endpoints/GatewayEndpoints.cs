@@ -5,7 +5,7 @@
         private static readonly string[] DownstreamServices =
         [
             "taskservice",
-        "documentservice"
+            "documentservice"
         ];
 
         public static void MapGatewayEndpoints(this WebApplication app)

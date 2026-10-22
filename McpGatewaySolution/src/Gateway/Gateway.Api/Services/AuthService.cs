@@ -91,19 +91,19 @@
 
             _logUserLoggedIn(logger, request.Email, null);
             return new AuthUserResponse(user.Id.ToString(), user.Email);
-        }
+        } 
 
-        public string? GenerateTokenFor(AuthUserResponse user)
+        public string? GenerateTokenFor(AuthUserResponse user, params string[] scopes)
         {
             try
             {
-                return tokenService.CreateAccessToken(user.SubjectId, user.Email, "mcp.tools.read mcp.tools.write");
+                return tokenService.CreateAccessToken(user.SubjectId, user.Email, scopes);
             }
             catch (Exception ex)
             {
                 _logTokenGenerationFailed(logger, user.Email, ex);
                 return null;
-            }
+            } 
         }
     }
 }

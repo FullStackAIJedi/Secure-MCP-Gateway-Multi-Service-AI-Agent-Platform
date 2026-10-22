@@ -1,7 +1,8 @@
 ﻿namespace Gateway.Api.Data
-{
-    using Gateway.Core.Entities; 
-    using Microsoft.EntityFrameworkCore; 
+{ 
+    using Microsoft.EntityFrameworkCore;
+
+    using Gateway.Core.Entities;
 
     public sealed class UserDbContext(DbContextOptions<UserDbContext> options) : DbContext(options)
     {

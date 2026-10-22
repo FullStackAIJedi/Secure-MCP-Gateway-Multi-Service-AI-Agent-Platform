@@ -2,8 +2,7 @@
 {  
     public interface IAgentService
     {
-        // Task<string> ChatAsync(string sessionId, string message, string jwt, CancellationToken cancellationToken);
-        Task<(string Reply, List<string> ToolsUsed)> ChatAsync(
+         Task<(string Reply, List<string> ToolsUsed)> ChatAsync(
             string sessionId, string message, string jwt, CancellationToken cancellationToken);
     }
 }

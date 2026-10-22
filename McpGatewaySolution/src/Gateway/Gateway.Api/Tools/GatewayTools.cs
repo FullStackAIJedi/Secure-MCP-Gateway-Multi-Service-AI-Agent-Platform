@@ -247,10 +247,10 @@
 
             try
             {
-                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                using var doc = JsonDocument.Parse(json);
                 var tasks = doc.RootElement;
 
-                if (tasks.ValueKind != System.Text.Json.JsonValueKind.Array || tasks.GetArrayLength() == 0)
+                if (tasks.ValueKind != JsonValueKind.Array || tasks.GetArrayLength() == 0)
                     return $"No tasks found matching \"{keyword}\".";
 
                 var lines = new List<string>();
@@ -335,7 +335,7 @@
                 cancellationToken);
         }
 
-        [McpServerTool(Name = "search_documents"), Description("Searches documents by keyword")]
+        [McpServerTool(Name = "search_documents"), Description("Searches documents by keyword. Keyword is required.")]
         public async Task<string> SearchDocumentsForAgent(
             [Description("Keyword")] string keyword,
             CancellationToken cancellationToken)
@@ -343,6 +343,9 @@
             var subjectId = GetSubjectIdFromContext();
             if (string.IsNullOrEmpty(subjectId))
                 return "Error: No subject ID found in token.";
+
+            if (string.IsNullOrWhiteSpace(keyword))
+                return "Error: keyword is required. Use a specific search term.";
 
             var json = await SearchDocuments(subjectId, keyword, cancellationToken);
 
@@ -357,8 +360,9 @@
                 var lines = new List<string>();
                 foreach (var document in documents.EnumerateArray())
                 {
+                    var id = document.GetProperty("id").GetInt32();
                     var title = document.GetProperty("title").GetString();
-                    lines.Add($"- {title}");
+                    lines.Add($"- [{id}] {title}");
                 }
                 return $"Found {lines.Count} document(s) matching \"{keyword}\":\n{string.Join("\n", lines)}";
             }
@@ -366,6 +370,48 @@
             {
                 return json;
             }
+        }
+
+        [McpServerTool(Name = "list_documents"), Description("Lists all documents in the knowledge base")]
+        public async Task<string> ListDocumentsForAgent(CancellationToken cancellationToken)
+        {
+            var subjectId = GetSubjectIdFromContext();
+            if (string.IsNullOrEmpty(subjectId))
+                return "Error: No subject ID found in token.";
+
+            var json = await ListDocuments(subjectId, cancellationToken);
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var documents = doc.RootElement;
+
+                if (documents.ValueKind != JsonValueKind.Array || documents.GetArrayLength() == 0)
+                    return "No documents found.";
+
+                var lines = new List<string>();
+                foreach (var document in documents.EnumerateArray())
+                {
+                    var title = document.GetProperty("title").GetString();
+                    var id = document.GetProperty("id").GetInt32();
+                    lines.Add($"- [{id}] {title}");
+                }
+                return $"You have {lines.Count} document(s):\n{string.Join("\n", lines)}";
+            }
+            catch
+            {
+                return json;
+            }
+        }
+
+        public async Task<string> ListDocuments(string subjectId, CancellationToken cancellationToken)
+        {
+            return await InvokeDownstreamAsync(
+                "list_documents", "documentservice", subjectId,
+                async client => await client.CallToolAsync("list_documents",
+                    new Dictionary<string, object?> { ["subjectId"] = subjectId },
+                    cancellationToken: cancellationToken),
+                cancellationToken);
         }
 
         public async Task<string> SearchDocuments(
@@ -379,27 +425,126 @@
                 cancellationToken);
         }
 
-        [McpServerTool(Name = "get_document"), Description("Gets a specific document by its ID")]
-        public async Task<string> GetDocumentForAgent(
-            [Description("Document ID")] int id,
+        [McpServerTool(Name = "delete_document"), Description("Deletes a document by its title")]
+        public async Task<string> DeleteDocumentForAgent(
+            [Description("Document title to delete")] string title,
             CancellationToken cancellationToken)
         {
             var subjectId = GetSubjectIdFromContext();
             if (string.IsNullOrEmpty(subjectId))
                 return "Error: No subject ID found in token.";
 
-            return await GetDocument(subjectId, id, cancellationToken);
+            if (string.IsNullOrWhiteSpace(title))
+                return "Error: Document title is required.";
+
+            var searchJson = await SearchDocuments(subjectId, title, cancellationToken);
+
+            try
+            {
+                using var doc = JsonDocument.Parse(searchJson);
+                var documents = doc.RootElement;
+
+                if (documents.ValueKind != JsonValueKind.Array || documents.GetArrayLength() == 0)
+                    return $"No document found with title \"{title}\".";
+
+                var firstDoc = documents[0];
+                var docId = firstDoc.GetProperty("id").GetInt32();
+                var docTitle = firstDoc.GetProperty("title").GetString();
+
+                var json = await DeleteDocument(subjectId, docId, cancellationToken);
+                var success = JsonSerializer.Deserialize<bool>(json);
+                return success
+                    ? $"Document \"{docTitle}\" deleted."
+                    : $"Could not delete document \"{docTitle}\".";
+            }
+            catch (Exception ex)
+            {
+                return $"Error: {ex.Message}";
+            }
         }
 
-        public async Task<string> GetDocument(
+        public async Task<string> DeleteDocument(
             string subjectId, int id, CancellationToken cancellationToken)
         {
             return await InvokeDownstreamAsync(
-                "get_document", "documentservice", subjectId,
-                async client => await client.CallToolAsync("get_document",
+                "delete_document", "documentservice", subjectId,
+                async client => await client.CallToolAsync("delete_document",
                     new Dictionary<string, object?> { ["subjectId"] = subjectId, ["id"] = id },
                     cancellationToken: cancellationToken),
                 cancellationToken);
+        } 
+
+        [McpServerTool(Name = "get_document"), Description("Gets a specific document by its title")]
+        public async Task<string> GetDocumentForAgent(
+             [Description("Document title")] string title,
+             CancellationToken cancellationToken)
+        {
+            Console.WriteLine($"[GATEWAY] get_document called with title: '{title}'");
+
+            var subjectId = GetSubjectIdFromContext();
+            if (string.IsNullOrEmpty(subjectId))
+                return "Error: No subject ID found in token.";
+
+            if (string.IsNullOrWhiteSpace(title))
+                return "Error: Document title is required.";
+
+            try
+            {
+                var json = await GetDocument(subjectId, title, cancellationToken);
+                Console.WriteLine($"[GATEWAY] get_document('{title}') raw: {json}");
+
+                if (json is null
+                    || string.IsNullOrWhiteSpace(json)
+                    || json.Trim().Equals("null", StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"No document found with title \"{title}\".";
+                }
+
+                using var fullDoc = JsonDocument.Parse(json);
+                if (fullDoc.RootElement.ValueKind == JsonValueKind.Null)
+                    return $"No document found with title \"{title}\".";
+
+                var fullTitle = GetStringIgnoreCase(fullDoc.RootElement, "title") ?? "(no title)";
+                var content = GetStringIgnoreCase(fullDoc.RootElement, "content") ?? "";
+
+                return $"- Title: {fullTitle}\n  Content: {content}";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GATEWAY] get_document FAILED: {ex}");
+                return $"Error: {ex.Message}";
+            }
+        }
+
+        private static string? GetStringIgnoreCase(JsonElement element, string propertyName)
+        {
+            if (element.ValueKind != JsonValueKind.Object)
+                return null;
+
+            foreach (var prop in element.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                    return prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() : null;
+            }
+
+            return null;
+        }
+         
+        public async Task<string> GetDocument(
+            string subjectId, string title, CancellationToken cancellationToken)
+        {
+            var result = await InvokeDownstreamAsync(
+                "get_document", "documentservice", subjectId,
+                async client => await client.CallToolAsync("get_document",
+                    new Dictionary<string, object?>
+                    {
+                        ["subjectId"] = subjectId,
+                        ["title"] = title
+                    },
+                    cancellationToken: cancellationToken),
+                cancellationToken);
+
+            return result ?? string.Empty;
         }
 
         [McpServerTool(Name = "add_document"), Description("Adds a new document to the knowledge base")]
@@ -412,7 +557,18 @@
             if (string.IsNullOrEmpty(subjectId))
                 return "Error: No subject ID found in token.";
 
-            return await AddDocument(subjectId, title, content, cancellationToken);
+            var json = await AddDocument(subjectId, title, content, cancellationToken);
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var docTitle = doc.RootElement.GetProperty("title").GetString();
+                return "Done";
+            }
+            catch
+            {
+                return json;
+            }
         }
 
         public async Task<string> AddDocument(
@@ -431,7 +587,53 @@
                     cancellationToken: cancellationToken),
                 cancellationToken);
         }
+         
+        [McpServerTool(Name = "update_document"), Description("Updates a document by its current title. Provide newTitle and/or content.")]
+        public async Task<string> UpdateDocumentForAgent(
+            [Description("Current document title (exact match)")] string currentTitle,
+            [Description("New document title (optional)")] string? newTitle,
+            [Description("New document content (optional)")] string? content,
+            CancellationToken cancellationToken)
+        {
+            var subjectId = GetSubjectIdFromContext();
+            if (string.IsNullOrEmpty(subjectId))
+                return "Error: No subject ID found in token.";
 
+            if (string.IsNullOrWhiteSpace(currentTitle))
+                return "Error: Current document title is required.";
+
+            try
+            {
+                var json = await UpdateDocument(subjectId, currentTitle, newTitle, content, cancellationToken);
+                var success = JsonSerializer.Deserialize<bool>(json);
+                return success
+                    ? "Done"
+                    : $"No document found with title \"{currentTitle}\".";
+            }
+            catch (Exception ex)
+            {
+                return $"Error: {ex.Message}";
+            }
+        }
+
+        public async Task<string> UpdateDocument(
+            string subjectId, string currentTitle, string? newTitle, string? content,
+            CancellationToken cancellationToken)
+        {
+            return await InvokeDownstreamAsync(
+                "update_document", "documentservice", subjectId,
+                async client => await client.CallToolAsync("update_document",
+                    new Dictionary<string, object?>
+                    {
+                        ["subjectId"] = subjectId,
+                        ["currentTitle"] = currentTitle,
+                        ["newTitle"] = newTitle,
+                        ["content"] = content
+                    },
+                    cancellationToken: cancellationToken),
+                cancellationToken);
+        }
+         
         private async Task<string> InvokeDownstreamAsync(
             string toolName, string serviceName, string subjectId,
             Func<McpClient, Task<CallToolResult>> invoke,

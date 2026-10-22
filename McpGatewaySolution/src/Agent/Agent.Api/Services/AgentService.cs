@@ -1,10 +1,13 @@
-﻿using Agent.Api.Services;
+﻿using System.Collections.Concurrent;
+using System.Text.Json;
+
 using Microsoft.Extensions.AI;
+
+using OpenAI;
+
+using Agent.Api.Services;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
-using OpenAI;
-using System.Collections.Concurrent;
-using System.Text.Json;
 
 namespace Agent.Services;
 
@@ -64,19 +67,42 @@ public sealed class AgentService(
 
         RULES:
         1. When the user asks to create a task, respond with ONLY this JSON (no other text):
-           {{""tool"": ""create_task"", ""arguments"": {{""title"": ""..."", ""description"": ""...""}}}}
+           {{""tool"": ""create_task"", ""arguments"": {{""title"": ""<title>"", ""description"": ""<description>""}}}}
+           ALWAYS include both ""title"" and ""description"". If no description, use "".
         2. When the user asks to see tasks, respond with ONLY:
            {{""tool"": ""list_tasks"", ""arguments"": {{}}}}
         3. When the user asks to complete a task, respond with ONLY:
-           {{""tool"": ""complete_task"", ""arguments"": {{""title"": ""..."", ""description"": ""...""}}}}
+           {{""tool"": ""complete_task"", ""arguments"": {{""id"": 123}}}}
         4. When the user asks to search tasks, respond with ONLY:
            {{""tool"": ""search_tasks"", ""arguments"": {{""keyword"": ""...""}}}}
         5. When the user asks to delete a task, respond with ONLY:
-           {{""tool"": ""delete_task"", ""arguments"": {{""title"": ""..."", ""description"": ""...""}}}}
-        6. When the user asks to search documents, respond with ONLY:
+           {{""tool"": ""delete_task"", ""arguments"": {{""id"": 123}}}}
+        6. When the user asks to add a document, respond with ONLY:
+           {{""tool"": ""add_document"", ""arguments"": {{""title"": ""<title>"", ""content"": ""<content>""}}}}
+           ALWAYS include both ""title"" and ""content"". If no content, use "".
+        7. When the user asks to search documents, respond with ONLY:
            {{""tool"": ""search_documents"", ""arguments"": {{""keyword"": ""...""}}}}
-        7. NEVER simulate. Use the tools. Respond with JSON only when calling a tool.
-        8. If the user asks for multiple actions, respond with MULTIPLE JSON objects, one per line.";
+           ALWAYS include a non-empty ""keyword"". If the user didn't specify a keyword, respond with text asking for one.
+        8. When the user asks to get a document by title, respond with ONLY:
+           {{""tool"": ""get_document"", ""arguments"": {{""title"": ""<title>""}}}}
+           ALWAYS include the exact ""title"" the user mentioned.
+           If the user did not provide an exact title but you have a previous tool result from list_documents or search_documents, use the exact title from that result.
+           Do NOT say the title has a formatting issue. Just pass the title exactly as it appears.
+           ALWAYS include the exact ""title"" the user mentioned.
+        9. When the user asks to delete a document by title, respond with ONLY:
+           {{""tool"": ""delete_document"", ""arguments"": {{""title"": ""<title>""}}}}
+           ALWAYS include the exact ""title"" the user mentioned.
+        10. Update document by its current title → {{""tool"": ""update_document"", ""arguments"": {{""currentTitle"": ""<exact current title>"", ""newTitle"": ""<new title or null>"", ""content"": ""<new content or null>""}}}}
+            - Use currentTitle from the user's request.
+            - If only renaming, set content to null.
+            - If only changing content, set newTitle to null.
+            - If both, set both.
+        11. Update document → {{""tool"": ""update_document"", ""arguments"": {{""currentTitle"": ""<exact current title>"", ""newTitle"": ""<new title or null>"", ""content"": ""<new content or null>""}}}}
+        12. If no tool matches the user request, respond with text explaining that you cannot help. DO NOT invent a tool.
+        13. If the user asks for multiple actions, respond with MULTIPLE JSON objects, one per line.
+        14. When the user asks to see ALL documents, respond with ONLY:
+            {{""tool"": ""list_documents"", ""arguments"": {{}}}}
+            Do NOT use search_documents when the user wants all documents.";
 
         var history = _sessions.GetOrAdd(sessionId, _ => new List<ChatMessage>
         {
@@ -115,7 +141,13 @@ public sealed class AgentService(
 
             var finalText = finalResponse.Text;
 
-            if (ParseAllToolCalls(finalText).Count > 0)
+            if (string.IsNullOrWhiteSpace(finalText) ||
+                finalText.TrimStart().StartsWith('{') ||
+                finalText.TrimStart().StartsWith('['))
+            {
+                finalText = string.Join("\n", results);
+            }
+            else if (ParseAllToolCalls(finalText).Count > 0)
             {
                 finalText = string.Join("\n", results);
             }
@@ -187,12 +219,19 @@ public sealed class AgentService(
         }
 
         return results;
-    }
+    } 
 
     private static async Task<string> InvokeToolAsync(
-        McpClient mcpClient, string toolName, Dictionary<string, object?> arguments, CancellationToken ct)
+    McpClient mcpClient, string toolName, Dictionary<string, object?> arguments, CancellationToken ct)
     {
+        var argsJson = JsonSerializer.Serialize(arguments);
+        Console.WriteLine($"[AGENT_TOOL] Invoking '{toolName}' with arguments: {argsJson}");
+
         var result = await mcpClient.CallToolAsync(toolName, arguments, cancellationToken: ct);
-        return result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? string.Empty;
+        var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? string.Empty;
+
+        Console.WriteLine($"[AGENT_TOOL] '{toolName}' returned (len={text.Length}): {text.Substring(0, Math.Min(300, text.Length))}");
+
+        return text;
     }
 }

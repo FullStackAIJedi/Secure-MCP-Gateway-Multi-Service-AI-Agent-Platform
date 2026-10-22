@@ -1,11 +1,14 @@
 ﻿namespace Gateway.Api.Endpoints
 {
+    using Gateway.Api.Data;
     using Gateway.Api.Infrastructure;
-    using Gateway.Api.Services; 
+    using Gateway.Api.Services;
+ 
     using Microsoft.AspNetCore.Antiforgery;
     using Microsoft.AspNetCore.Mvc;
+    using Microsoft.EntityFrameworkCore;
     using System.Security.Claims;
- 
+
     public static class AuthEndpoints
     {
         public static void MapAuthEndpoints(this WebApplication app)
@@ -28,21 +31,7 @@
                 .RequireAuthorization()
                 .WithName("Me");
 
-            //group.MapPost("/agent-token", (IAuthService authService) =>
-            //{
-            //    var user = new AuthUserResponse("agent-service", "agent@system.local");
-            //    var token = authService.GenerateTokenFor(user);
-            //    return Results.Ok(new { accessToken = token });
-            //}).AllowAnonymous();
-            //group.MapPost("/agent-token", (string? email, IAuthService authService) =>
-            //{
-            //    var userEmail = email ?? "sekul.net@gmail.com";
-            //    var subjectId = $"user-{userEmail.GetHashCode():x}";
-            //    var user = new AuthUserResponse(subjectId, userEmail);
-            //    var token = authService.GenerateTokenFor(user);
-            //    return Results.Ok(new { accessToken = token });
-            //}).AllowAnonymous();
-            group.MapPost("/agent-token", (HttpContext context, Data.UserDbContext db, IAuthService authService) =>
+            group.MapPost("/agent-token", (HttpContext context, IAuthService authService) =>
             {
                 var subjectId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 var email = context.User.FindFirst(ClaimTypes.Email)?.Value;
@@ -51,21 +40,21 @@
                     return Results.Unauthorized();
 
                 var authUser = new AuthUserResponse(subjectId, email);
-                var token = authService.GenerateTokenFor(authUser);
+                var token = authService.GenerateTokenFor(authUser, "mcp.tools.read", "mcp.tools.write");
                 return Results.Ok(new { accessToken = token });
             }).RequireAuthorization();
         }
-
+         
         private static IResult Register(
             [FromBody] RegisterRequest request,
-            IAuthService authService,
+            [FromServices] IAuthService authService,
             [FromServices] ICookieWriter cookies,
             HttpContext context)
         {
             var user = authService.Register(request);
             if (user is null) return Results.BadRequest(new { error = "Invalid registration data" });
 
-            var token = authService.GenerateTokenFor(user);
+            var token = authService.GenerateTokenFor(user, "mcp.tools.read", "mcp.tools.write");
             if (token is null) return Results.Problem("Token generation failed");
 
             cookies.WriteAuthCookies(context, token);
@@ -73,19 +62,38 @@
         }
 
         private static IResult Login(
-            LoginRequest request,
-            IAuthService authService,
-            ICookieWriter cookies,
+            [FromBody] LoginRequest request,
+            [FromServices] IAuthService authService,
+            [FromServices] ICookieWriter cookies,
             HttpContext context)
         {
             var user = authService.Login(request);
             if (user is null) return Results.Unauthorized();
 
-            var token = authService.GenerateTokenFor(user);
+            var token = authService.GenerateTokenFor(user, "mcp.tools.read", "mcp.tools.write");
             if (token is null) return Results.Problem("Token generation failed");
 
             cookies.WriteAuthCookies(context, token);
             return Results.Ok(new LoginResponse(user));
+        }
+
+        private static IResult AgentToken(
+            string? email,
+            [FromServices] UserDbContext db,
+            [FromServices] IAuthService authService,
+            [FromQuery] string? scopes)
+        {
+            var userEmail = email ?? "sekul.net@gmail.com";
+            var user = db.Users.AsNoTracking().FirstOrDefault(u => u.Email == userEmail);
+            if (user is null) return Results.NotFound(new { error = "User not found" });
+
+            var requestedScopes = string.IsNullOrEmpty(scopes)
+                ? new[] { "mcp.tools.read", "mcp.tools.write" }
+                : scopes.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+            var authUser = new AuthUserResponse(user.Id.ToString(), user.Email);
+            var token = authService.GenerateTokenFor(authUser, requestedScopes);
+            return Results.Ok(new { accessToken = token });
         }
 
         private static async Task<IResult> Logout(

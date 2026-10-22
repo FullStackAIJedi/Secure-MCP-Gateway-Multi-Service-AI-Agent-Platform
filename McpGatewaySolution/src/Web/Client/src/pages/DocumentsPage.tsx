@@ -15,7 +15,7 @@ const SearchInput = styled.input`
   padding: 10px;
   margin-bottom: 16px;
   border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  border-radius: 10px;
   font-size: 1rem;
   color: #333;
   background: #fff;
@@ -39,7 +39,7 @@ const ResultItem = styled.li`
 
 const ResultTitle = styled.h3`
   margin: 0 0 8px;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
   color: #333;
 `;
 
@@ -115,7 +115,7 @@ export function DocumentsPage() {
 
   return (
     <Container>
-      <h1>Documents</h1>
+      <h1>Docs</h1>
 
       <SearchInput
         type="search"

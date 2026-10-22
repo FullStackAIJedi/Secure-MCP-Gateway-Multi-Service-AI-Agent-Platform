@@ -8,18 +8,18 @@
     using Microsoft.IdentityModel.Tokens;
 
     using Gateway.Api.Configuration;
-
+     
     public sealed class TokenService(IOptions<JwtOptions> options) : ITokenService
     {
         private readonly JwtOptions _options = options.Value;
 
-        public string CreateAccessToken(string subjectId, string email, string scope)
+        public string CreateAccessToken(string subjectId, string email, params string[] scopes)
         {
-            var claims = new[]
-            {
-            new Claim(ClaimTypes.NameIdentifier, subjectId),
-            new Claim(ClaimTypes.Email, email),
-            new Claim("scope", scope)
+            var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, subjectId),
+            new(ClaimTypes.Email, email),
+            new("scope", string.Join(" ", scopes))
         };
 
             var credentials = new SigningCredentials(

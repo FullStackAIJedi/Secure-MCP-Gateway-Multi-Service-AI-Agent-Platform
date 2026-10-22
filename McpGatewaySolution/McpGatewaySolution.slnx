@@ -11,8 +11,9 @@
     <Project Path="src/Gateway/Gateway.Core/Gateway.Core.csproj" Id="1695c911-b495-4e0e-9c6b-357c91e209e2" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/DocumentService.IntegrationTests/DocumentService.IntegrationTests.csproj" Id="15209fae-4d4d-4642-992a-f033d4d2de97" />
-    <Project Path="tests/Gateway.IntegrationTests/Gateway.IntegrationTests.csproj" Id="2ba20442-1e9e-477d-93c6-0d680c7c44ce" />
-    <Project Path="tests/TaskService.IntegrationTests/TaskService.IntegrationTests.csproj" Id="b9dc5e93-a900-43a8-82a6-7d2b2a8dd611" />
+    <Project Path="tests/Agent.IntegrationTests/Agent.IntegrationTests.csproj" Id="cd9c2221-0a57-40c0-ae4f-6b2187280fae" />
+    <Project Path="tests/DocumentService.IntegrationTests/DocumentService.IntegrationTests.csproj" Id="8e0810be-edfc-4af8-ac83-f0c70d58cc6d" />
+    <Project Path="tests/Gateway.IntegrationTests/Gateway.IntegrationTests.csproj" Id="148a430f-3e79-4eff-a7e3-aa2922b64465" />
+    <Project Path="tests/TaskService.IntegrationTests/TaskService.IntegrationTests.csproj" Id="30c05c51-a8c8-47fb-94c6-c55d3e837758" />
   </Folder>
 </Solution>

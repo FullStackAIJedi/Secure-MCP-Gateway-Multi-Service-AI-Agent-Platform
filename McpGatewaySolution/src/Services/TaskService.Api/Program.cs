@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+
 using TaskService.Api.Data;
 using TaskService.Api.Tools;
 
@@ -15,12 +16,7 @@ builder.Services.AddMcpServer()
     .WithTools<TaskTools>();   
 
 var app = builder.Build();
-
-//using (var scope = app.Services.CreateScope())
-//{
-//    var db = scope.ServiceProvider.GetRequiredService<TaskDbContext>();
-//    await db.Database.EnsureCreatedAsync();
-//}
+ 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<TaskDbContext>();
@@ -31,3 +27,5 @@ app.MapHealthChecks("/health");
 app.MapMcp("/mcp");
 
 app.Run();
+
+public partial class Program { }

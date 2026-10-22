@@ -8,12 +8,28 @@ interface ChatResponse {
 export function useAgentChatMutation() {
   return useMutation({
     mutationFn: async (input: { sessionId: string; message: string }) => {
-      // Вземи JWT от /api/auth/me (не връща JWT) — затова използвай /agent-token
       const tokenResponse = await fetch("/api/auth/agent-token", {
         method: "POST",
         credentials: "include",
       });
-      const { accessToken } = await tokenResponse.json();
+
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        throw new Error(
+          `Failed to get agent token: ${tokenResponse.status} - ${errorText || "Empty response"}`,
+        );
+      }
+
+      const tokenText = await tokenResponse.text();
+      if (!tokenText) {
+        throw new Error("Agent token response is empty");
+      }
+
+      const { accessToken } = JSON.parse(tokenText) as { accessToken: string };
+
+      if (!accessToken) {
+        throw new Error("Agent token response missing accessToken");
+      }
 
       const response = await fetch("/api/agent/chat", {
         method: "POST",
@@ -24,8 +40,19 @@ export function useAgentChatMutation() {
         body: JSON.stringify(input),
       });
 
-      if (!response.ok) throw new Error(`Agent error: ${response.status}`);
-      return response.json() as Promise<ChatResponse>;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Agent error: ${response.status} - ${errorText || "Empty response"}`,
+        );
+      }
+
+      const text = await response.text();
+      if (!text) {
+        throw new Error("Agent returned empty response");
+      }
+
+      return JSON.parse(text) as ChatResponse;
     },
   });
 }

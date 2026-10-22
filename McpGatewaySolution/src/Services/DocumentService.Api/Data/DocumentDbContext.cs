@@ -1,7 +1,7 @@
 ﻿namespace DocumentService.Api.Data
-{ 
-    using Microsoft.EntityFrameworkCore;  
- 
+{
+    using Microsoft.EntityFrameworkCore;
+
     public sealed class DocumentDbContext(DbContextOptions<DocumentDbContext> options) : DbContext(options)
     {
         public DbSet<Document> Documents => Set<Document>();
@@ -9,6 +9,7 @@
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.HasPostgresExtension("vector");
+            modelBuilder.HasPostgresExtension("pg_trgm");
 
             modelBuilder.Entity<Document>(entity =>
             {
@@ -16,6 +17,16 @@
                 entity.Property(e => e.Title).HasMaxLength(300).IsRequired();
                 entity.Property(e => e.Content).IsRequired();
                 entity.Property(e => e.Embedding).HasColumnType("vector(768)");
+
+                entity.HasIndex(e => e.CreatedAt);
+
+                entity.HasIndex(e => e.Title)
+                    .HasMethod("gin")
+                    .HasOperators("gin_trgm_ops");
+
+                entity.HasIndex(e => e.Content)
+                    .HasMethod("gin")
+                    .HasOperators("gin_trgm_ops");
             });
         }
     }

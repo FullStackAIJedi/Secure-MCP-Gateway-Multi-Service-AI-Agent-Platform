@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { useLoginMutation } from "../hooks/useAuth";
+import { useRegisterMutation } from "../hooks/useAuth";
 import { Button } from "../components/ui/Button";
 
 const Container = styled.div`
@@ -46,7 +46,6 @@ const StyledLink = styled(Link)`
   font-weight: 500;
   padding-left: 7px;
   text-decoration: none;
-  transition: color 0.2s ease;
 
   &:hover {
     text-decoration: underline;
@@ -55,26 +54,46 @@ const StyledLink = styled(Link)`
   }
 `;
 
-export function LoginPage() {
+export function SignUp() {
   const navigate = useNavigate();
-  const loginMutation = useLoginMutation();
+  const registerMutation = useRegisterMutation();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      loginMutation.mutate(
+      setValidationError(null);
+
+      if (password.length < 6) {
+        setValidationError("Password must be at least 6 characters");
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setValidationError("Passwords do not match");
+        return;
+      }
+
+      registerMutation.mutate(
         { email, password },
         { onSuccess: () => navigate("/tasks") },
       );
     },
-    [email, password, loginMutation, navigate],
+    [email, password, confirmPassword, registerMutation, navigate],
   );
+
+  const errorMessage =
+    validationError ??
+    (registerMutation.error ? registerMutation.error.message : null);
 
   return (
     <Container>
-      <Title>Sign in</Title>
+      <Title>Sign Up</Title>
+
       <Form onSubmit={handleSubmit}>
         <Input
           type="email"
@@ -84,23 +103,38 @@ export function LoginPage() {
           required
           autoComplete="email"
         />
+
         <Input
           type="password"
-          placeholder="Password"
+          placeholder="Password min 6 chars"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          autoComplete="current-password"
+          minLength={6}
+          autoComplete="new-password"
         />
-        {loginMutation.error && (
-          <ErrorText>{loginMutation.error.message}</ErrorText>
-        )}
-        <Button disabled={loginMutation.isPending}>
-          {loginMutation.isPending ? "Signing in..." : "Sign in"}
+
+        <Input
+          type="password"
+          placeholder="Confirm password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+          autoComplete="new-password"
+        />
+
+        {errorMessage && <ErrorText>{errorMessage}</ErrorText>}
+
+        <Button disabled={registerMutation.isPending}>
+          {registerMutation.isPending
+            ? "Creating account..."
+            : "Create account"}
         </Button>
       </Form>
+
       <Footer>
-        First time here? <StyledLink to="/register">Sign Up</StyledLink>
+        Already registered?
+        <StyledLink to="/login">Sign in</StyledLink>
       </Footer>
     </Container>
   );

@@ -2,6 +2,6 @@
 {  
     public interface ITokenService
     {
-        string CreateAccessToken(string subjectId, string email, string scope);
+        string CreateAccessToken(string subjectId, string email, params string[] scopes);
     }
 }
