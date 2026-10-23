@@ -64,6 +64,14 @@ app.MapPost("/api/agent/chat", async (
     return Results.Ok(new ChatResponse(reply, toolsUsed));
 });
 
+app.MapPost("/api/agent/approve", async (
+    ApprovalRequest req, IAgentService agent, HttpContext ctx, CancellationToken ct) =>
+{
+    var jwt = ctx.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+    var result = await agent.ExecuteApprovedToolAsync(req.ToolName, req.Arguments, jwt, ct);
+    return Results.Ok(new { result });
+});
+
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
 app.Run();

@@ -112,14 +112,14 @@
             return true;
         }
 
-        [McpServerTool, Description("Deletes a document by its exact title")]
+        [McpServerTool, Description("Deletes a document by identifier")]
         public async Task<bool> DeleteDocument(
             string subjectId,
-            string title,
+            int id,
             CancellationToken cancellationToken)
         {
             var doc = await db.Documents
-                .FirstOrDefaultAsync(d => d.Title == title, cancellationToken);
+                .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
 
             if (doc is null) return false;
 

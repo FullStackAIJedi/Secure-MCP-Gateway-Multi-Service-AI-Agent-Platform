@@ -1,13 +1,11 @@
-﻿using System.Collections.Concurrent;
-using System.Text.Json;
-
+﻿using Agent.Api.Services;
 using Microsoft.Extensions.AI;
-
-using OpenAI;
-
-using Agent.Api.Services;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using OpenAI;
+using System.Collections.Concurrent;
+using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace Agent.Services;
 
@@ -28,9 +26,9 @@ public sealed class AgentService(
             LogLevel.Information,
             new EventId(2, "ToolsDiscovered"),
             "Session {SessionId}: discovered {ToolCount} tools");
-
+     
     public async Task<(string Reply, List<string> ToolsUsed)> ChatAsync(
-        string sessionId, string message, string jwt, CancellationToken cancellationToken)
+    string sessionId, string message, string jwt, CancellationToken cancellationToken)
     {
         var ollamaUrl = configuration["Ollama:BaseUrl"] ?? "http://localhost:11434";
         var model = configuration["Ollama:Model"] ?? "llama3.2";
@@ -72,11 +70,11 @@ public sealed class AgentService(
         2. When the user asks to see tasks, respond with ONLY:
            {{""tool"": ""list_tasks"", ""arguments"": {{}}}}
         3. When the user asks to complete a task, respond with ONLY:
-           {{""tool"": ""complete_task"", ""arguments"": {{""id"": 123}}}}
+           {{""tool"": ""complete_task"", ""arguments"": {{""title"": ""<title>""}}}}
         4. When the user asks to search tasks, respond with ONLY:
            {{""tool"": ""search_tasks"", ""arguments"": {{""keyword"": ""...""}}}}
         5. When the user asks to delete a task, respond with ONLY:
-           {{""tool"": ""delete_task"", ""arguments"": {{""id"": 123}}}}
+           {{""tool"": ""delete_task"", ""arguments"": {{""title"": ""<title>""}}}}
         6. When the user asks to add a document, respond with ONLY:
            {{""tool"": ""add_document"", ""arguments"": {{""title"": ""<title>"", ""content"": ""<content>""}}}}
            ALWAYS include both ""title"" and ""content"". If no content, use "".
@@ -88,7 +86,6 @@ public sealed class AgentService(
            ALWAYS include the exact ""title"" the user mentioned.
            If the user did not provide an exact title but you have a previous tool result from list_documents or search_documents, use the exact title from that result.
            Do NOT say the title has a formatting issue. Just pass the title exactly as it appears.
-           ALWAYS include the exact ""title"" the user mentioned.
         9. When the user asks to delete a document by title, respond with ONLY:
            {{""tool"": ""delete_document"", ""arguments"": {{""title"": ""<title>""}}}}
            ALWAYS include the exact ""title"" the user mentioned.
@@ -97,17 +94,16 @@ public sealed class AgentService(
             - If only renaming, set content to null.
             - If only changing content, set newTitle to null.
             - If both, set both.
-        11. Update document → {{""tool"": ""update_document"", ""arguments"": {{""currentTitle"": ""<exact current title>"", ""newTitle"": ""<new title or null>"", ""content"": ""<new content or null>""}}}}
-        12. If no tool matches the user request, respond with text explaining that you cannot help. DO NOT invent a tool.
-        13. If the user asks for multiple actions, respond with MULTIPLE JSON objects, one per line.
-        14. When the user asks to see ALL documents, respond with ONLY:
+        11. If no tool matches the user request, respond with text explaining that you cannot help. DO NOT invent a tool.
+        12. If the user asks for multiple actions, respond with MULTIPLE JSON objects, one per line.
+        13. When the user asks to see ALL documents, respond with ONLY:
             {{""tool"": ""list_documents"", ""arguments"": {{}}}}
             Do NOT use search_documents when the user wants all documents.";
 
         var history = _sessions.GetOrAdd(sessionId, _ => new List<ChatMessage>
-        {
-            new(ChatRole.System, systemPrompt)
-        });
+    {
+        new(ChatRole.System, systemPrompt)
+    });
 
         history.Add(new ChatMessage(ChatRole.User, message));
 
@@ -131,8 +127,27 @@ public sealed class AgentService(
                 results.Add(toolResult);
             }
 
+            var combinedResults = string.Join("\n", results);
+
+            if (!string.IsNullOrEmpty(combinedResults) && combinedResults.StartsWith("APPROVAL_REQUIRED:", StringComparison.Ordinal))
+            {
+                var parts = combinedResults.Split(':', 3);
+                var approvalJson = JsonSerializer.Serialize(new
+                {
+                    requiresApproval = true,
+                    toolName = parts[1],
+                    arguments = parts[2]
+                });
+
+                history.Add(new ChatMessage(ChatRole.Assistant, reply));
+                history.Add(new ChatMessage(ChatRole.User, $"Tool results:\n{combinedResults}"));
+                _logSessionActivity(logger, sessionId, history.Count, null);
+
+                return (approvalJson, toolsUsed);
+            }
+
             history.Add(new ChatMessage(ChatRole.Assistant, reply));
-            history.Add(new ChatMessage(ChatRole.User, $"Tool results:\n{string.Join("\n", results)}"));
+            history.Add(new ChatMessage(ChatRole.User, $"Tool results:\n{combinedResults}"));
 
             var finalResponse = await chatClient.GetResponseAsync(
                 history,
@@ -145,11 +160,11 @@ public sealed class AgentService(
                 finalText.TrimStart().StartsWith('{') ||
                 finalText.TrimStart().StartsWith('['))
             {
-                finalText = string.Join("\n", results);
+                finalText = combinedResults;
             }
             else if (ParseAllToolCalls(finalText).Count > 0)
             {
-                finalText = string.Join("\n", results);
+                finalText = combinedResults;
             }
 
             _logSessionActivity(logger, sessionId, history.Count, null);
@@ -158,6 +173,43 @@ public sealed class AgentService(
 
         _logSessionActivity(logger, sessionId, history.Count, null);
         return (reply, toolsUsed);
+    }
+
+    public async Task<string> ExecuteApprovedToolAsync(
+        string toolName, string arguments, string jwt, CancellationToken cancellationToken)
+    {
+        using var doc = JsonDocument.Parse(arguments);
+        var id = doc.RootElement.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.Number
+            ? idProp.GetInt32()
+            : (int?)null;
+
+        if (id is null)
+            return "Error: missing 'id' in approval arguments";
+
+        var endpoint = toolName switch
+        {
+            "delete_task" => $"/api/internal/delete-task?id={id}",
+            "delete_document" => $"/api/internal/delete-document?id={id}",
+            _ => null
+        };
+
+        if (endpoint is null)
+            return $"Error: unsupported tool '{toolName}' for approval";
+
+        var gatewayUrl = configuration["Gateway:McpUrl"]?.Replace("/mcp", "") ?? "http://localhost:5000";
+        var httpClient = new HttpClient { BaseAddress = new Uri(gatewayUrl) };
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var response = await httpClient.PostAsync(endpoint, null, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(cancellationToken);
+            return $"Error: {response.StatusCode} - {error}";
+        }
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var resultDoc = JsonDocument.Parse(json);
+        return resultDoc.RootElement.GetProperty("result").GetString() ?? "Done";
     }
 
     private static List<(string ToolName, Dictionary<string, object?> Arguments)> ParseAllToolCalls(string text)

@@ -30,7 +30,7 @@
             group.MapGet("/me", Me)
                 .RequireAuthorization()
                 .WithName("Me");
-
+             
             group.MapPost("/agent-token", (HttpContext context, IAuthService authService) =>
             {
                 var subjectId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -40,11 +40,12 @@
                     return Results.Unauthorized();
 
                 var authUser = new AuthUserResponse(subjectId, email);
-                var token = authService.GenerateTokenFor(authUser, "mcp.tools.read", "mcp.tools.write");
+                var token = authService.GenerateTokenFor(authUser, "mcp.tools.read", "mcp.tools.write", "mcp.tools.admin");
                 return Results.Ok(new { accessToken = token });
             }).RequireAuthorization();
         }
-         
+
+
         private static IResult Register(
             [FromBody] RegisterRequest request,
             [FromServices] IAuthService authService,
@@ -54,7 +55,7 @@
             var user = authService.Register(request);
             if (user is null) return Results.BadRequest(new { error = "Invalid registration data" });
 
-            var token = authService.GenerateTokenFor(user, "mcp.tools.read", "mcp.tools.write");
+            var token = authService.GenerateTokenFor(user, "mcp.tools.read", "mcp.tools.write", "mcp.tools.admin");
             if (token is null) return Results.Problem("Token generation failed");
 
             cookies.WriteAuthCookies(context, token);
@@ -70,7 +71,7 @@
             var user = authService.Login(request);
             if (user is null) return Results.Unauthorized();
 
-            var token = authService.GenerateTokenFor(user, "mcp.tools.read", "mcp.tools.write");
+            var token = authService.GenerateTokenFor(user, "mcp.tools.read", "mcp.tools.write", "mcp.tools.admin");
             if (token is null) return Results.Problem("Token generation failed");
 
             cookies.WriteAuthCookies(context, token);
@@ -112,8 +113,6 @@
             var email = context.User.FindFirst(ClaimTypes.Email)?.Value;
             if (subjectId is null) return Results.Unauthorized();
             return Results.Ok(new AuthUserResponse(subjectId, email ?? string.Empty));
-        }
-
-
+        }  
     }
 }
