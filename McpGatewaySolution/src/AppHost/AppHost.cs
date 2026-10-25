@@ -24,8 +24,7 @@ var gateway = builder.AddProject<Projects.Gateway_Api>("gateway")
 
 builder.AddViteApp("client", "../Web/Client")
     .WithReference(gateway)
-    .WithHttpEndpoint(port: 5173, env: "PORT")
-    .PublishAsDockerFile();
+    .WithHttpEndpoint(port: 5173, env: "PORT");
 
 builder.AddProject<Projects.Agent_Api>("agent-api");
 

@@ -1,4 +1,4 @@
-﻿namespace TaskService.IntegrationTests
+namespace TaskService.IntegrationTests
 {
     using System.Diagnostics.CodeAnalysis; 
     using Microsoft.EntityFrameworkCore;
@@ -644,6 +644,22 @@
             results.Should().HaveCount(2);
             results[0].Title.Should().Be("Match B");
             results[1].Title.Should().Be("Match A");
+        }
+
+        [Fact]
+        public async Task SearchTasksWithSqlInjectionKeywordDoesNotThrowOrLeakData()
+        { 
+            await _tools.CreateTask("user-1", "Buy milk", "", default);
+             
+            var injection = "'; DROP TABLE Tasks; --";
+             
+            var results = await _tools.SearchTasks("user-1", injection, default);
+
+            results.Should().BeEmpty();
+             
+            var allTasks = await _tools.ListTasks("user-1", default);
+            allTasks.Should().HaveCount(1);
+            allTasks[0].Title.Should().Be("Buy milk");
         }
 
         [Fact]

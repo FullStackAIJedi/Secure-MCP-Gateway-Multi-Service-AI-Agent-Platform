@@ -1,31 +1,48 @@
 @baseUrl = http://localhost:5000
 @agentUrl = http://localhost:5003
+@email = test@example.com
+@password = Test1234
 
 ### Register
+# @name register
 POST {{baseUrl}}/api/v1/auth/register
 Content-Type: application/json
 
 {
-  "email": "user@example.com",
-  "password": "Password123"
+  "email": "{{email}}",
+  "password": "{{password}}"
 }
 
 ### Login
+# @name login
 POST {{baseUrl}}/api/v1/auth/login
 Content-Type: application/json
 
 {
-  "email": "user@example.com",
-  "password": "Password123"
+  "email": "{{email}}",
+  "password": "{{password}}"
 }
 
+### Get current user
+GET {{baseUrl}}/api/v1/auth/me
+
 ### Get agent token
+# @name agentToken
 POST {{baseUrl}}/api/v1/auth/agent-token
+
+### Refresh token
+POST {{baseUrl}}/api/v1/auth/refresh
+
+### Logout
+POST {{baseUrl}}/api/v1/auth/logout
+
+### ── Tasks
 
 ### List tasks
 GET {{baseUrl}}/api/v1/tasks
 
 ### Create task
+# @name createTask
 POST {{baseUrl}}/api/v1/tasks
 Content-Type: application/json
 
@@ -34,21 +51,64 @@ Content-Type: application/json
   "description": "Test description"
 }
 
-### Complete task
+### Complete task (replace {id} with actual task id)
 PATCH {{baseUrl}}/api/v1/tasks/1/complete
+
+### ── Documents
 
 ### Search documents
 GET {{baseUrl}}/api/v1/documents/search?keyword=contract
 
+### ── Agent
+
 ### Chat with agent
-POST {{agentUrl}}/api/agent/chat
+POST {{agentUrl}}/api/v1/agent/chat
 Content-Type: application/json
-Authorization: Bearer {{agentToken}}
+Authorization: Bearer {{agentToken.response.body.$.accessToken}}
 
 {
   "sessionId": "test-session",
   "message": "give me all tasks"
 }
 
-### Security audit logs
+### Approve destructive tool call
+POST {{agentUrl}}/api/v1/agent/approve
+Content-Type: application/json
+Authorization: Bearer {{agentToken.response.body.$.accessToken}}
+
+{
+  "toolName": "delete_task",
+  "arguments": "{\"id\":1}"
+}
+
+### ── Internal (admin only)
+
+### Delete task by id
+POST {{baseUrl}}/api/v1/internal/delete-task?id=1
+
+### Delete document by id
+POST {{baseUrl}}/api/v1/internal/delete-document?id=1
+
+### ── Security
+
+### Audit logs
 GET {{baseUrl}}/api/v1/security/audit-logs?page=1&pageSize=12
+
+### Audit logs with filters
+GET {{baseUrl}}/api/v1/security/audit-logs?page=1&pageSize=12&outcome=denied&toolName=delete_task
+
+### ── Gateway
+
+### Gateway info
+GET {{baseUrl}}/api/v1/gateway/info
+
+### ── Health
+
+### Full health check
+GET {{baseUrl}}/health
+
+### Liveness
+GET {{baseUrl}}/health/live
+
+### Readiness
+GET {{baseUrl}}/health/ready

@@ -1,4 +1,4 @@
-﻿namespace Gateway.IntegrationTests
+namespace Gateway.IntegrationTests
 {
     using System.IdentityModel.Tokens.Jwt;
     using System.Security.Claims;
@@ -126,7 +126,7 @@
         }
 
         [Fact]
-        public void TokenExpiringInOneSecondPassesValidation()
+        public void TokenExpiringInThirtySecondsPassesValidation()
         {
             var token = CreateToken(ValidKey, "mcp-gateway", "mcp-gateway", DateTime.UtcNow.AddSeconds(30));
             var handler = new JwtSecurityTokenHandler();

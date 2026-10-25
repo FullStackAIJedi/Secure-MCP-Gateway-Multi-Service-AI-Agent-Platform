@@ -1,10 +1,17 @@
 ---
 name: Post-mortem
 about: Blameless post-mortem for a resolved incident
-title: '[POSTMORTEM] '
+title: "[POSTMORTEM] "
 labels: postmortem
-assignees: ''
+assignees: ""
 ---
+
+## Severity
+
+- [ ] SEV1 — Critical
+- [ ] SEV2 — Major
+- [ ] SEV3 — Minor
+- [ ] SEV4 — Low
 
 ## Incident summary
 
@@ -23,5 +30,5 @@ assignees: ''
 ## Action items
 
 | Action | Owner | Due |
-|--------|-------|-----|
+| ------ | ----- | --- |
 |        |       |     |

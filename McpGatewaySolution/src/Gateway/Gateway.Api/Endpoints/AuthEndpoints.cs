@@ -1,4 +1,4 @@
-﻿namespace Gateway.Api.Endpoints
+namespace Gateway.Api.Endpoints
 {
     using System.Security.Claims;
  
@@ -32,7 +32,11 @@
             group.MapGet("/me", Me)
                 .RequireAuthorization()
                 .WithName("Me");
-             
+
+            group.MapPost("/refresh", Refresh)
+                .RequireAuthorization()
+                .WithName("Refresh");
+
             group.MapPost("/agent-token", (HttpContext context, IAuthService authService) =>
             {
                 var subjectId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -78,26 +82,7 @@
 
             cookies.WriteAuthCookies(context, token);
             return Results.Ok(new LoginResponse(user));
-        }
-
-        private static IResult AgentToken(
-            string? email,
-            [FromServices] UserDbContext db,
-            [FromServices] IAuthService authService,
-            [FromQuery] string? scopes)
-        {
-            var userEmail = email ?? "sekul.net@gmail.com";
-            var user = db.Users.AsNoTracking().FirstOrDefault(u => u.Email == userEmail);
-            if (user is null) return Results.NotFound(new { error = "User not found" });
-
-            var requestedScopes = string.IsNullOrEmpty(scopes)
-                ? new[] { "mcp.tools.read", "mcp.tools.write" }
-                : scopes.Split(',', StringSplitOptions.RemoveEmptyEntries);
-
-            var authUser = new AuthUserResponse(user.Id.ToString(), user.Email);
-            var token = authService.GenerateTokenFor(authUser, requestedScopes);
-            return Results.Ok(new { accessToken = token });
-        }
+        } 
 
         private static async Task<IResult> Logout(
             ICookieWriter cookies,
@@ -115,6 +100,29 @@
             var email = context.User.FindFirst(ClaimTypes.Email)?.Value;
             if (subjectId is null) return Results.Unauthorized();
             return Results.Ok(new AuthUserResponse(subjectId, email ?? string.Empty));
-        }  
+        }
+
+        private static IResult Refresh(
+            HttpContext context,
+            [FromServices] IAuthService authService,
+            [FromServices] ICookieWriter cookies)
+        {
+            var subjectId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = context.User.FindFirst(ClaimTypes.Email)?.Value;
+
+            if (subjectId is null || email is null)
+                return Results.Unauthorized();
+
+            var authUser = new AuthUserResponse(subjectId, email);
+            var token = authService.GenerateTokenFor(
+                authUser,
+                "mcp.tools.read",
+                "mcp.tools.write",
+                "mcp.tools.admin");
+            if (token is null) return Results.Problem("Token generation failed");
+
+            cookies.WriteAuthCookies(context, token);
+            return Results.Ok(new { accessToken = token });
+        }
     }
 }

@@ -22,7 +22,7 @@
 
 ## Bottleneck
 
-At 50 users, p99 latency exceeds 1s because each `list_tasks` call goes through:
+At 50 users, p99 latency is 1.24s (above the 1s SLO) because each `list_tasks` call goes through:
 
 1. Gateway (JWT validation, scope check, rate limit)
 2. MCP protocol handshake
