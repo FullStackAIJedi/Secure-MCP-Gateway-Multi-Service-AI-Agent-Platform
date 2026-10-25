@@ -50,13 +50,8 @@ namespace Gateway.Api.Services
 
         public AuthUserResponse? Register(RegisterRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.Email) || request.Password.Length < 8)
-                return null;
-
-            if (!request.Password.Any(char.IsUpper) ||
-                !request.Password.Any(char.IsLower) ||
-                !request.Password.Any(char.IsDigit))
-                return null;
+            if (string.IsNullOrWhiteSpace(request.Email) || request.Password.Length < 6)
+                return null; 
 
             if (db.Users.Any(u => u.Email == request.Email))
             {
