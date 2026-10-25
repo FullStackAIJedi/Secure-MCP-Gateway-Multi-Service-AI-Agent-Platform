@@ -1,0 +1,54 @@
+@baseUrl = http://localhost:5000
+@agentUrl = http://localhost:5003
+
+### Register
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "Password123"
+}
+
+### Login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "Password123"
+}
+
+### Get agent token
+POST {{baseUrl}}/api/v1/auth/agent-token
+
+### List tasks
+GET {{baseUrl}}/api/v1/tasks
+
+### Create task
+POST {{baseUrl}}/api/v1/tasks
+Content-Type: application/json
+
+{
+  "title": "Test task",
+  "description": "Test description"
+}
+
+### Complete task
+PATCH {{baseUrl}}/api/v1/tasks/1/complete
+
+### Search documents
+GET {{baseUrl}}/api/v1/documents/search?keyword=contract
+
+### Chat with agent
+POST {{agentUrl}}/api/agent/chat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "sessionId": "test-session",
+  "message": "give me all tasks"
+}
+
+### Security audit logs
+GET {{baseUrl}}/api/v1/security/audit-logs?page=1&pageSize=12

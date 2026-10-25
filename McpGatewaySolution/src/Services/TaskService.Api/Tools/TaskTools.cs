@@ -5,6 +5,7 @@
 
     using ModelContextProtocol.Server;
     using TaskService.Api.Data;
+    using TaskService.Api.Entities;
 
     [McpServerToolType]
     public sealed class TaskTools(TaskDbContext db)

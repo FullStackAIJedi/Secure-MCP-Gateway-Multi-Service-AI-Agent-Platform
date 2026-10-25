@@ -16,6 +16,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   taskservice:
     build:
@@ -25,6 +26,12 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
       ConnectionStrings__taskdb: "Host=postgres;Database=${TASK_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: taskservice
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=docker,service.version=1.0.0"
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
     ports:
       - "${TASKSERVICE_PORT}:8080"
     depends_on:
@@ -39,6 +46,12 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
       ConnectionStrings__documentdb: "Host=postgres;Database=${DOCUMENT_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: documentservice
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=docker,service.version=1.0.0"
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
     ports:
       - "${DOCUMENTSERVICE_PORT}:8080"
     depends_on:
@@ -64,6 +77,12 @@ services:
 
       services__taskservice__http__0: "http://taskservice:8080"
       services__documentservice__http__0: "http://documentservice:8080"
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: gateway
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=docker,service.version=1.0.0"
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
     volumes:
       - gateway-keys:/app/keys
     ports:
@@ -86,11 +105,38 @@ services:
       Ollama__BaseUrl: ${OLLAMA_BASE_URL}
       Ollama__Model: ${OLLAMA_MODEL}
       Gateway__McpUrl: ${AGENT_GATEWAY_URL}
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: agent
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=docker,service.version=1.0.0"
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
     ports:
       - "${AGENT_PORT}:8080"
     depends_on:
       gateway:
         condition: service_started
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: mcp-otel-collector
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otel-collector.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    restart: unless-stopped
+
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: mcp-aspire-dashboard
+    environment:
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888"
+      - "18889:18889"
+    restart: unless-stopped
 
 volumes:
   mcp-postgres-data:

@@ -1,4 +1,4 @@
-﻿namespace Agent.Api.Services
+namespace Agent.Api.Services.Abstractions
 {  
     public interface IAgentService
     {

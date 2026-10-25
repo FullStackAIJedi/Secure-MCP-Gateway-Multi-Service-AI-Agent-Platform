@@ -2,6 +2,8 @@
 {
     using Microsoft.EntityFrameworkCore;
 
+    using TaskService.Api.Entities;
+
     public sealed class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(options)
     {
         public DbSet<TaskItem> Tasks => Set<TaskItem>();
@@ -17,15 +19,5 @@
                 entity.HasIndex(e => e.OwnerSubjectId);
             });
         }
-    }
-
-    public sealed class TaskItem
-    {
-        public int Id { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public bool IsComplete { get; set; }
-        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-        public string OwnerSubjectId { get; set; } = string.Empty;
-    }
+    } 
 }

@@ -18,7 +18,7 @@ const subscribeRefresh = (cb: () => void): void => {
 };
 
 async function tryRefresh(): Promise<boolean> {
-  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+  const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
     method: "POST",
     credentials: "include",
     headers: {

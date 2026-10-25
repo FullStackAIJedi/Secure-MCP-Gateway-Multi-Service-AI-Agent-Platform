@@ -9,10 +9,13 @@ import {
 import { NavBar } from "./components/NavBar";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { SignUp } from "./pages/SignUp";
-import { TasksPage } from "./pages/TasksPage";
-import { DocumentsPage } from "./pages/DocumentsPage";
-import { ChatPage } from "./pages/ChatPage";
+import { Tasks } from "./pages/Tasks";
+import { Documents } from "./pages/Documents";
+import { Chat } from "./pages/Chat";
 import { SignIn } from "./pages/SignIn";
+import { Security } from "./pages/Security";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Toaster } from "react-hot-toast";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,23 +37,27 @@ function AppLayout() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<SignIn />} />
-          <Route path="/register" element={<SignUp />} />
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <Toaster position="top-right" />
+          <Routes>
+            <Route path="/login" element={<SignIn />} />
+            <Route path="/register" element={<SignUp />} />
 
-          <Route element={<ProtectedRoute />}>
-            <Route element={<AppLayout />}>
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/documents" element={<DocumentsPage />} />
-              <Route path="/chat" element={<ChatPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route element={<AppLayout />}>
+                <Route path="/tasks" element={<Tasks />} />
+                <Route path="/documents" element={<Documents />} />
+                <Route path="/chat" element={<Chat />} />
+                <Route path="/security" element={<Security />} />
+              </Route>
             </Route>
-          </Route>
 
-          <Route path="*" element={<Navigate to="/tasks" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+            <Route path="*" element={<Navigate to="/tasks" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

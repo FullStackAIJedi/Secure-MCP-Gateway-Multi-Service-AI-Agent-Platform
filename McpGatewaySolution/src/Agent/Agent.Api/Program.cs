@@ -1,13 +1,18 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
+using Microsoft.Extensions.Hosting.Security;
+
+using Serilog;
 
 using Agent.Api.Contracts;
-using Agent.Api.Services;
-using Agent.Services;
+using Agent.Api.Services.Abstractions;
+using Agent.Api.Services.Implementations;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 builder.Services.AddSingleton<IAgentService, AgentService>();
+builder.Services.AddSingleton<IMcpClientFactory, McpClientFactory>();
+builder.Services.AddSingleton<IChatClientFactory, ChatClientFactory>();
 
 builder.Services.AddCors(options =>
 {
@@ -22,9 +27,15 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 app.UseCors("Client");
+app.UseSecurityHeaders();
+app.UseSerilogRequestLogging();
 
-app.MapPost("/api/agent/chat", async (
+app.MapDefaultEndpoints();
+
+app.MapPost("/api/v1/agent/chat", async (
     ChatRequest request,
     HttpContext context,
     IAgentService agent,
@@ -38,25 +49,7 @@ app.MapPost("/api/agent/chat", async (
         jwt = cookieToken ?? string.Empty;
 
     if (string.IsNullOrEmpty(jwt))
-    { 
         return Results.Unauthorized();
-    }
-
-    try
-    {
-        var handler = new JwtSecurityTokenHandler();
-        var token = handler.ReadJwtToken(jwt);
-         
-        var subjectId = token.Claims.FirstOrDefault(c =>
-            c.Type == "nameid" ||
-            c.Type == "sub" ||
-            c.Type == ClaimTypes.NameIdentifier ||
-            c.Type.EndsWith("nameidentifier", StringComparison.Ordinal))?.Value; 
-     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[AGENT] JWT parse error: {ex.Message}");
-    }
 
     var (reply, toolsUsed) = await agent.ChatAsync(
         request.SessionId, request.Message, jwt, cancellationToken);
@@ -64,7 +57,7 @@ app.MapPost("/api/agent/chat", async (
     return Results.Ok(new ChatResponse(reply, toolsUsed));
 });
 
-app.MapPost("/api/agent/approve", async (
+app.MapPost("/api/v1/agent/approve", async (
     ApprovalRequest req, IAgentService agent, HttpContext ctx, CancellationToken ct) =>
 {
     var jwt = ctx.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
@@ -72,6 +65,6 @@ app.MapPost("/api/agent/approve", async (
     return Results.Ok(new { result });
 });
 
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
-
 app.Run();
+
+public partial class Program { }

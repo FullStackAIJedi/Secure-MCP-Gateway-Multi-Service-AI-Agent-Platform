@@ -9,7 +9,7 @@ export interface TaskItem {
 export interface DocumentSummary {
   id: number;
   title: string;
-  contentPreview: string;
+  content: string;
 }
 
 export interface AuthUser {

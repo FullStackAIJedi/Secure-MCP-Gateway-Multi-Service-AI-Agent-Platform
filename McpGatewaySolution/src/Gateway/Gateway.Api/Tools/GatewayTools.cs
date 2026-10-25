@@ -1,27 +1,31 @@
 ﻿namespace Gateway.Api.Tools
 {
     using System.Text.Json;
-    using System.ComponentModel;
     using System.Diagnostics;
-    using System.Security.Claims;
+    using System.ComponentModel;
+    using System.Security.Claims; 
 
     using Microsoft.AspNetCore.Http;
 
+    using Gateway.Core.Contracts;
+    using Gateway.Core.Abstractions; 
+ 
     using ModelContextProtocol.Client;
     using ModelContextProtocol.Protocol;
     using ModelContextProtocol.Server;
-
-    using Gateway.Core.Abstractions;
-
+ 
     [McpServerToolType]
     public sealed partial class GatewayTools
-    {
+    { 
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IToolPermissionPolicy _permissionPolicy;
         private readonly IToolAuditLogger _auditLogger;
         private readonly ILogger<GatewayTools> _logger;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IScopeProvider _scopeProvider;
+        private readonly IToolRegistry _toolRegistry;
+        private readonly string _environmentName;
+        private readonly string _environment;
 
         public GatewayTools(
             IHttpClientFactory httpClientFactory,
@@ -29,14 +33,19 @@
             IToolAuditLogger auditLogger,
             ILogger<GatewayTools> logger,
             IHttpContextAccessor httpContextAccessor,
-            IScopeProvider scopeProvider)
+            IToolRegistry toolRegistry,
+            IScopeProvider scopeProvider,
+            IHostEnvironment hostEnvironment)
         {
             _httpClientFactory = httpClientFactory;
             _permissionPolicy = permissionPolicy;
             _auditLogger = auditLogger;
             _logger = logger;
             _httpContextAccessor = httpContextAccessor;
+            _toolRegistry = toolRegistry;
             _scopeProvider = scopeProvider;
+            _environmentName = hostEnvironment.ApplicationName;
+            _environment = hostEnvironment.EnvironmentName;
         }
 
         private string? GetSubjectIdFromContext()
@@ -457,8 +466,7 @@
                 cancellationToken);
         }
 
-        //[McpServerTool(Name = "delete_document_by_id"), Description("Deletes a document by its ID (used for approved deletions)")]
-        public async Task<string> DeleteDocumentById(
+         public async Task<string> DeleteDocumentById(
             [Description("Document ID")] int id,
             CancellationToken cancellationToken)
         {
@@ -590,7 +598,8 @@
                 cancellationToken);
         }
 
-        [McpServerTool(Name = "update_document"), Description("Updates a document by its current title. Provide newTitle and/or content.")]
+        [McpServerTool(Name = "update_document"), 
+            Description("Updates a document by its current title. Provide newTitle and/or content.")]
         public async Task<string> UpdateDocumentForAgent(
             [Description("Current document title (exact match)")] string currentTitle,
             [Description("New document title (optional)")] string? newTitle,
@@ -635,7 +644,7 @@
                     cancellationToken: cancellationToken),
                 cancellationToken);
         }
-
+         
         private async Task<string> InvokeDownstreamAsync(
             string toolName, string serviceName, string subjectId,
             Func<McpClient, Task<CallToolResult>> invoke,
@@ -645,11 +654,24 @@
             var allowed = await _permissionPolicy.IsAllowedAsync(
                 subjectId, toolName, userScopes, cancellationToken);
 
+            var userEmail = _httpContextAccessor.HttpContext?.User
+                .FindFirst(ClaimTypes.Email)?.Value;
+
+            _toolRegistry.TryGetScope(toolName, out var toolScope);
+
             if (!allowed)
             {
-                await _auditLogger.LogAsync(
-                    new ToolInvocationRecord(subjectId, toolName, serviceName, "denied",
-                        DateTimeOffset.UtcNow, 0), cancellationToken);
+                await _auditLogger.LogAsync(new ToolInvocationRecord(
+                    subjectId, toolName, serviceName, "denied",
+                    DateTimeOffset.UtcNow, 0,
+                    TraceId: Activity.Current?.TraceId.ToHexString(),
+                    SpanId: Activity.Current?.SpanId.ToHexString(),
+                    ServiceName: _environmentName,
+                    Environment: _environment,
+                    UserEmail: userEmail,
+                    ToolScope: toolScope.ToString()),
+                    cancellationToken);
+
                 throw new UnauthorizedAccessException(
                     $"Subject {subjectId} not allowed to call {toolName}");
             }
@@ -673,16 +695,32 @@
 
                 if (result.IsError == true)
                 {
-                    await _auditLogger.LogAsync(
-                        new ToolInvocationRecord(subjectId, toolName, serviceName, "error",
-                            DateTimeOffset.UtcNow, sw.ElapsedMilliseconds), cancellationToken);
+                    await _auditLogger.LogAsync(new ToolInvocationRecord(
+                        subjectId, toolName, serviceName, "error",
+                        DateTimeOffset.UtcNow, sw.ElapsedMilliseconds,
+                        TraceId: Activity.Current?.TraceId.ToHexString(),
+                        SpanId: Activity.Current?.SpanId.ToHexString(),
+                        ServiceName: _environmentName,
+                        Environment: _environment,
+                        UserEmail: userEmail,
+                        ToolScope: toolScope.ToString(),
+                        ErrorMessage: text),
+                        cancellationToken);
+
                     throw new InvalidOperationException(
                         $"Downstream {serviceName}.{toolName} returned error: {text}");
                 }
 
-                await _auditLogger.LogAsync(
-                    new ToolInvocationRecord(subjectId, toolName, serviceName, "success",
-                        DateTimeOffset.UtcNow, sw.ElapsedMilliseconds), cancellationToken);
+                await _auditLogger.LogAsync(new ToolInvocationRecord(
+                    subjectId, toolName, serviceName, "success",
+                    DateTimeOffset.UtcNow, sw.ElapsedMilliseconds,
+                    TraceId: Activity.Current?.TraceId.ToHexString(),
+                    SpanId: Activity.Current?.SpanId.ToHexString(),
+                    ServiceName: _environmentName,
+                    Environment: _environment,
+                    UserEmail: userEmail,
+                    ToolScope: toolScope.ToString()),
+                    cancellationToken);
 
                 return text;
             }
@@ -690,27 +728,22 @@
             {
                 sw.Stop();
                 LogDownstreamToolFailed(_logger, toolName, serviceName, ex);
-                await _auditLogger.LogAsync(
-                    new ToolInvocationRecord(subjectId, toolName, serviceName, "error",
-                        DateTimeOffset.UtcNow, sw.ElapsedMilliseconds), cancellationToken);
+                await _auditLogger.LogAsync(new ToolInvocationRecord(
+                    subjectId, toolName, serviceName, "error",
+                    DateTimeOffset.UtcNow, sw.ElapsedMilliseconds,
+                    TraceId: Activity.Current?.TraceId.ToHexString(),
+                    SpanId: Activity.Current?.SpanId.ToHexString(),
+                    ServiceName: _environmentName,
+                    Environment: _environment,
+                    UserEmail: userEmail,
+                    ToolScope: toolScope.ToString(),
+                    ErrorMessage: ex.Message),
+                    cancellationToken);
                 throw;
             }
         }
 
         [LoggerMessage(Level = LogLevel.Error, Message = "Downstream tool {Tool} failed on {Service}")]
         private static partial void LogDownstreamToolFailed(ILogger logger, string tool, string service, Exception ex);
-    }
-
-    public sealed class InMemoryToolAuditLogger : IToolAuditLogger
-    {
-        private readonly List<ToolInvocationRecord> _records = [];
-
-        public Task LogAsync(ToolInvocationRecord record, CancellationToken cancellationToken)
-        {
-            _records.Add(record);
-            return Task.CompletedTask;
-        }
-
-        public IReadOnlyList<ToolInvocationRecord> GetRecords() => _records.AsReadOnly();
-    }
+    }  
 }

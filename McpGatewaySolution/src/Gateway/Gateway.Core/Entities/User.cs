@@ -1,4 +1,4 @@
-﻿namespace Gateway.Core.Entities
+namespace Gateway.Core.Entities
 {
     public sealed class User
     {
@@ -6,5 +6,7 @@
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+        public int FailedLoginAttempts { get; set; }
+        public DateTimeOffset? LockoutEnd { get; set; }
     }
 }

@@ -1,0 +1,16 @@
+repos:
+  - repo: https://github.com/dotnet/format
+    rev: v9.0.0
+    hooks:
+      - id: dotnet-format
+        args: ["--verify-no-changes", "--include", "."]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']

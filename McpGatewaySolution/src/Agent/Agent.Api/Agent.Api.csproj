@@ -11,5 +11,9 @@
     <PackageReference Include="OpenAI" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+    <InternalsVisibleTo Include="Agent.IntegrationTests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ServiceDefaults\ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>

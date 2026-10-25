@@ -6,6 +6,7 @@
     using Microsoft.AspNetCore.Mvc;
 
     using Gateway.Api.Tools;
+    using Gateway.Api.Contracts;
 
     public static class TaskEndpoints
     {
@@ -16,7 +17,7 @@
 
         public static void MapTaskEndpoints(this WebApplication app)
         {
-            var group = app.MapGroup("/api/tasks")
+            var group = app.MapGroup("/api/v1/tasks")
                 .WithTags("Tasks")
                 .RequireAuthorization("mcp.read");
 
@@ -106,14 +107,5 @@
         {
             return context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         }
-    }
-
-    public sealed record TaskItemResponse(
-        int Id,
-        string Title,
-        string Description,
-        bool IsComplete,
-        DateTimeOffset CreatedAt);
-
-    public sealed record CreateTaskRequest(string Title, string? Description);
+    } 
 }

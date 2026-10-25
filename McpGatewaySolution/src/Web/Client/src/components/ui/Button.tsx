@@ -3,7 +3,7 @@ import styled, { css } from "styled-components";
 
 interface ButtonProps {
   variant?: "primary" | "secondary";
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   disabled?: boolean;
   onClick?: () => void;
   children: React.ReactNode;
@@ -11,7 +11,7 @@ interface ButtonProps {
 
 interface StyledButtonProps {
   $variant: "primary" | "secondary";
-  $size: "sm" | "md";
+  $size: "sm" | "md" | "lg";
 }
 
 const StyledButton = styled.button<StyledButtonProps>`
@@ -19,23 +19,36 @@ const StyledButton = styled.button<StyledButtonProps>`
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   cursor: pointer;
   font-weight: 500;
   transition:
     background-color 0.2s,
     opacity 0.2s;
 
-  ${({ $size }) =>
-    $size === "sm"
-      ? css`
+  ${({ $size }) => {
+    switch ($size) {
+      case "sm":
+        return css`
           padding: 4px 12px;
           font-size: 0.875rem;
-        `
-      : css`
-          padding: 8px 20px;
+        `;
+      case "lg":
+        return css`
+          height: 55px;
+          box-sizing: border-box;
+          padding: 0 24px;
+          font-size: 1.125rem;
+        `;
+      default:
+        return css`
+          height: 44px;
+          box-sizing: border-box;
+          padding: 0 20px;
           font-size: 1rem;
-        `}
+        `;
+    }
+  }}
 
   ${({ $variant }) =>
     $variant === "primary"

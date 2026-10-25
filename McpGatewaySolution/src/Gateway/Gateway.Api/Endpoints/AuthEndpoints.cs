@@ -1,19 +1,21 @@
 ﻿namespace Gateway.Api.Endpoints
 {
-    using Gateway.Api.Data;
-    using Gateway.Api.Infrastructure;
-    using Gateway.Api.Services;
+    using System.Security.Claims;
  
     using Microsoft.AspNetCore.Antiforgery;
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.EntityFrameworkCore;
-    using System.Security.Claims;
+
+    using Gateway.Api.Data;
+    using Gateway.Api.Infrastructure;
+    using Gateway.Api.Services;
 
     public static class AuthEndpoints
     {
         public static void MapAuthEndpoints(this WebApplication app)
         {
-            var group = app.MapGroup("/api/auth").WithTags("Auth");
+            var group = app.MapGroup("/api/v1/auth")
+                .WithTags("Auth");
 
             group.MapPost("/register", Register)
                 .AllowAnonymous()

@@ -8,7 +8,7 @@ interface ChatResponse {
 export function useAgentChatMutation() {
   return useMutation({
     mutationFn: async (input: { sessionId: string; message: string }) => {
-      const tokenResponse = await fetch("/api/auth/agent-token", {
+      const tokenResponse = await fetch("/api/v1/auth/agent-token", {
         method: "POST",
         credentials: "include",
       });
@@ -31,7 +31,7 @@ export function useAgentChatMutation() {
         throw new Error("Agent token response missing accessToken");
       }
 
-      const response = await fetch("/api/agent/chat", {
+      const response = await fetch("/api/v1/agent/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

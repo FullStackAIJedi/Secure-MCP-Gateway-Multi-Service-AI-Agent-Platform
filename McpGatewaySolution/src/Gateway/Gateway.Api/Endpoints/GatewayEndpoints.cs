@@ -1,4 +1,4 @@
-﻿namespace Gateway.Api.Endpoints
+namespace Gateway.Api.Endpoints
 {  
     public static class GatewayEndpoints
     {
@@ -10,7 +10,7 @@
 
         public static void MapGatewayEndpoints(this WebApplication app)
         {
-            app.MapGet("/api/gateway/info", () => Results.Ok(new
+            app.MapGet("/api/v1/gateway/info", () => Results.Ok(new
             {
                 service = "MCP Gateway",
                 version = "1.0.0",

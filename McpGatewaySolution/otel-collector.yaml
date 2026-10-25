@@ -1,0 +1,83 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+    send_batch_max_size: 1024
+
+  redaction:
+    allow_all_keys: false
+    allowed_keys:
+      - service.name
+      - service.version
+      - deployment.environment
+      - trace_id
+      - span_id
+      - parent_span_id
+      - name
+      - kind
+      - duration
+      - status.code
+      - status.message
+      - http.method
+      - http.route
+      - http.status_code
+      - http.url
+      - gen_ai.system
+      - gen_ai.request.model
+      - gen_ai.response.model
+      - gen_ai.usage.input_tokens
+      - gen_ai.usage.output_tokens
+      - gen_ai.operation.name
+      - gen_ai.tool.name
+      - mcp.method.name
+      - mcp.session.id
+      - mcp.tool.name
+      - mcp.tool.scope
+      - mcp.subject.id
+      - outcome
+      - error.type
+      - error.message
+    blocked_values:
+      - "eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"
+      - "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+      - "\\b\\d{4}[- ]?\\d{4}[- ]?\\d{4}[- ]?\\d{4}\\b"
+    summary: debug
+
+exporters:
+  otlp_grpc/aspire:
+    endpoint: aspire-dashboard:18889
+    tls:
+      insecure: true
+
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, redaction, batch]
+      exporters: [otlp_grpc/aspire, debug]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_grpc/aspire, debug]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, redaction, batch]
+      exporters: [otlp_grpc/aspire, debug]

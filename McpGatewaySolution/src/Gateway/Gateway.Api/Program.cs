@@ -1,21 +1,25 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Hosting.Security;
 
-using Gateway.Api.Tools;
-using Gateway.Api.Data;
-using Gateway.Api.Endpoints;
-using Gateway.Api.Services;
-using Gateway.Api.Infrastructure;
-using Gateway.Api.Configuration;
+using Serilog;
 
-using Gateway.Core.Abstractions;
+using Scalar.AspNetCore;
+
 using Gateway.Core.Entities;
 using Gateway.Core.Policies;
+using Gateway.Core.Abstractions;
+using Gateway.Api.Configuration;
+using Gateway.Api.Data;
+using Gateway.Api.Endpoints;
+using Gateway.Api.Infrastructure;
+using Gateway.Api.Services;
+using Gateway.Api.Tools;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,6 +73,10 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.Configure<Microsoft.Extensions.Hosting.Observability.RedactionOptions>(
+    builder.Configuration.GetSection(
+        Microsoft.Extensions.Hosting.Observability.RedactionOptions.SectionName));
+
 builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("mcp-tools", context =>
@@ -85,6 +93,15 @@ builder.Services.AddRateLimiter(options =>
     options.OnRejected = async (context, ct) =>
     {
         context.HttpContext.Response.StatusCode = 429;
+
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = retryAfter.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        context.HttpContext.Response.Headers["X-RateLimit-Limit"] = "100";
+        context.HttpContext.Response.Headers["X-RateLimit-Remaining"] = "0";
+
         await context.HttpContext.Response.WriteAsync("Rate limit exceeded.", ct);
     };
 });
@@ -93,7 +110,7 @@ builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<ICookieWriter, CookieWriter>();
 builder.Services.AddSingleton<IToolAuditLogger, InMemoryToolAuditLogger>();
-
+builder.Services.AddSingleton<InMemoryToolAuditLogger>(sp => (InMemoryToolAuditLogger)sp.GetRequiredService<IToolAuditLogger>());
 builder.Services.AddSingleton<IToolRegistry, ToolRegistry>();
 builder.Services.AddSingleton<IToolPermissionPolicy, ScopeBasedToolPermissionPolicy>();
 builder.Services.AddScoped<IScopeProvider, HttpContextScopeProvider>();
@@ -119,7 +136,15 @@ builder.Services.AddMcpServer()
 builder.AddNpgsqlDbContext<UserDbContext>("userdb");
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
+builder.Services.AddOpenApi();
+
 var app = builder.Build();
+
+app.MapOpenApi();
+app.MapScalarApiReference();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -128,12 +153,19 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors("Client");
+
+app.UseSecurityHeaders();
+
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.UseRateLimiter();
 app.UseAntiforgery();
 
-app.MapHealthChecks("/health");
+app.UseSerilogRequestLogging();
+
+app.MapDefaultEndpoints();
+
 app.MapAuthEndpoints();
 app.MapTaskEndpoints();
 app.MapDocumentEndpoints();
@@ -141,26 +173,38 @@ app.MapGatewayEndpoints();
 
 app.MapMcp("/mcp").RequireAuthorization("mcp.read").RequireRateLimiting("mcp-tools");
 
-app.MapGet("/api/security/audit-logs", (IToolAuditLogger logger) =>
+app.MapGet("/api/v1/security/audit-logs", (
+    InMemoryToolAuditLogger logger,
+    int page = 1,
+    int pageSize = 10,
+    string? outcome = null,
+    string? toolName = null,
+    string? subjectId = null,
+    string? search = null) =>
 {
-    var inMemory = logger as InMemoryToolAuditLogger;
-    return Results.Ok(inMemory?.GetRecords() ?? Array.Empty<ToolInvocationRecord>());
+    page = Math.Max(1, page);
+    pageSize = Math.Clamp(pageSize, 1, 100);
+
+    var result = logger.GetPagedRecords(page, pageSize, outcome, toolName, subjectId, search);
+    return Results.Ok(result);
 }).RequireAuthorization("mcp.admin");
 
-app.MapPost("/api/internal/delete-task", async (
+app.MapPost("/api/v1/internal/delete-task", async (
     int id, GatewayTools tools, CancellationToken ct) =>
 {
     var result = await tools.DeleteTaskById(id, ct);
     return Results.Ok(new { result });
 }).RequireAuthorization("mcp.admin");
 
-app.MapPost("/api/internal/delete-document", async (
+app.MapPost("/api/v1/internal/delete-document", async (
     int id, GatewayTools tools, CancellationToken ct) =>
 {
     var result = await tools.DeleteDocumentById(id, ct);
     return Results.Ok(new { result });
 }).RequireAuthorization("mcp.admin");
 
+
 app.Run();
 
 public partial class Program { }
+

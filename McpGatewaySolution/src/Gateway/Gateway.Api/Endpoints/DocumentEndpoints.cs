@@ -6,6 +6,7 @@
     using Microsoft.AspNetCore.Mvc;
 
     using Gateway.Api.Tools;
+    using Gateway.Api.Contracts;
 
     public static class DocumentEndpoints
     {
@@ -16,7 +17,7 @@
 
         public static void MapDocumentEndpoints(this WebApplication app)
         {
-            var group = app.MapGroup("/api/documents")
+            var group = app.MapGroup("/api/v1/documents")
                 .WithTags("Documents")
                 .RequireAuthorization("mcp.read");
 
@@ -47,10 +48,5 @@
                 return Results.Forbid();
             }
         }
-    }
-
-    public sealed record DocumentSummaryResponse(
-        int Id,
-        string Title,
-        string ContentPreview);
+    } 
 }

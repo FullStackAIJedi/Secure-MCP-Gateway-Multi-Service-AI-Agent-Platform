@@ -154,7 +154,7 @@ function tryParseApproval(reply: string): ApprovalPayload | null {
   return null;
 }
 
-export function ChatPage() {
+export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [approvingIndex, setApprovingIndex] = useState<number | null>(null);
@@ -213,7 +213,7 @@ export function ChatPage() {
 
       setApprovingIndex(index);
       try {
-        const tokenResponse = await fetch("/api/auth/agent-token", {
+        const tokenResponse = await fetch("/api/v1/auth/agent-token", {
           method: "POST",
           credentials: "include",
         });
@@ -228,7 +228,7 @@ export function ChatPage() {
 
         const agentUrl =
           import.meta.env.VITE_AGENT_URL ?? "http://localhost:5003";
-        const response = await fetch(`${agentUrl}/api/agent/approve`, {
+        const response = await fetch(`${agentUrl}/api/v1/agent/approve`, {
           method: "POST",
           credentials: "include",
           headers: {

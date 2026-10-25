@@ -14,7 +14,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.18.4",
-    "styled-components": "^6.6.0"
+    "styled-components": "^6.6.0",
+    "react-hot-toast": "^2.4.1"
   },
   "devDependencies": {
     "@tanstack/react-query-devtools": "^5.62.0",

@@ -96,6 +96,7 @@ export function NavBar() {
         <StyledLink to="/tasks">Tasks</StyledLink>
         <StyledLink to="/documents">Documents</StyledLink>
         <StyledLink to="/chat">Chat</StyledLink>
+        <StyledLink to="/security">Security</StyledLink>
       </Left>
 
       <Right>

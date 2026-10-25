@@ -1,10 +1,12 @@
 ﻿namespace DocumentService.Api.Tools
 {
     using System.ComponentModel;
+
     using Microsoft.EntityFrameworkCore;
 
     using ModelContextProtocol.Server;
     using DocumentService.Api.Data;
+    using DocumentService.Api.Contracts;
 
     [McpServerToolType]
     public sealed class DocumentTools(DocumentDbContext db)
@@ -127,7 +129,5 @@
             await db.SaveChangesAsync(cancellationToken);
             return true;
         }
-    }
-
-    public sealed record DocumentSummary(int Id, string Title, string Content);
+    } 
 }

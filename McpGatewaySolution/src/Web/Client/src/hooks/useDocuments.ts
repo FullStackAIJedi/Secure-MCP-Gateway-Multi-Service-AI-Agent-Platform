@@ -8,7 +8,7 @@ export function useDocumentSearchQuery(keyword: string) {
     queryKey: queryKeys.documents.search(keyword),
     queryFn: () =>
       apiFetch<DocumentSummary[]>(
-        `/api/documents/search?keyword=${encodeURIComponent(keyword)}`,
+        `/api/v1/documents/search?keyword=${encodeURIComponent(keyword)}`,
       ),
     enabled: keyword.trim().length > 0,
     staleTime: 60_000,

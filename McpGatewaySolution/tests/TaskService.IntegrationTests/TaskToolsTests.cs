@@ -8,6 +8,7 @@
  
     using TaskService.Api.Data;
     using TaskService.Api.Tools;
+    using TaskService.Api.Entities;
 
     [SuppressMessage("Reliability", "CA1001:Types that own disposable fields should be disposable",
         Justification = "Fields are disposed in DisposeAsync via IAsyncLifetime")]
@@ -541,7 +542,7 @@
         [Fact]
         public async Task CreateManyTasksThenCompleteHalf()
         {
-            var tasks = new List<TaskService.Api.Data.TaskItem>();
+            var tasks = new List<TaskItem>();
             for (int i = 0; i < 10; i++)
                 tasks.Add(await _tools.CreateTask("user-1", $"Task {i}", "", default));
 
@@ -558,7 +559,7 @@
         [Fact]
         public async Task DeleteAllTasksThenListReturnsEmpty()
         {
-            var tasks = new List<TaskService.Api.Data.TaskItem>();
+            var tasks = new List<TaskItem>();
             for (int i = 0; i < 5; i++)
                 tasks.Add(await _tools.CreateTask("user-1", $"Task {i}", "", default));
 

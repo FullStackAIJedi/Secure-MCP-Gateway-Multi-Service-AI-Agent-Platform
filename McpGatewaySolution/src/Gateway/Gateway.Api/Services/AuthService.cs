@@ -1,11 +1,11 @@
-﻿namespace Gateway.Api.Services
+namespace Gateway.Api.Services
 {
+    using Gateway.Api.Data;
+    using Gateway.Core.Entities;
+
     using Microsoft.AspNetCore.Identity;
     using Microsoft.EntityFrameworkCore;
 
-    using Gateway.Api.Data;
-    using Gateway.Core.Entities;
- 
     public sealed class AuthService(
         UserDbContext db,
         ITokenService tokenService,
@@ -50,7 +50,12 @@
 
         public AuthUserResponse? Register(RegisterRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.Email) || request.Password.Length < 6)
+            if (string.IsNullOrWhiteSpace(request.Email) || request.Password.Length < 8)
+                return null;
+
+            if (!request.Password.Any(char.IsUpper) ||
+                !request.Password.Any(char.IsLower) ||
+                !request.Password.Any(char.IsDigit))
                 return null;
 
             if (db.Users.Any(u => u.Email == request.Email))
@@ -67,7 +72,16 @@
             user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
 
             db.Users.Add(user);
-            db.SaveChanges();
+
+            try
+            {
+                db.SaveChanges();
+            }
+            catch (DbUpdateException)
+            {
+                _logRegistrationFailedEmailExists(logger, request.Email, null);
+                return null;
+            }
 
             _logUserRegistered(logger, request.Email, null);
             return new AuthUserResponse(user.Id.ToString(), user.Email);
@@ -75,23 +89,40 @@
 
         public AuthUserResponse? Login(LoginRequest request)
         {
-            var user = db.Users.AsNoTracking().FirstOrDefault(u => u.Email == request.Email);
+            var user = db.Users.FirstOrDefault(u => u.Email == request.Email);
             if (user is null)
             {
                 _logLoginFailedUserNotFound(logger, request.Email, null);
                 return null;
             }
 
-            var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
-            if (result == PasswordVerificationResult.Failed)
+            if (user.LockoutEnd.HasValue && user.LockoutEnd.Value > DateTimeOffset.UtcNow)
             {
                 _logLoginFailedWrongPassword(logger, request.Email, null);
                 return null;
             }
 
+            var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
+            if (result == PasswordVerificationResult.Failed)
+            {
+                user.FailedLoginAttempts++;
+                if (user.FailedLoginAttempts >= 5)
+                {
+                    user.LockoutEnd = DateTimeOffset.UtcNow.AddMinutes(15);
+                    user.FailedLoginAttempts = 0;
+                }
+                db.SaveChanges();
+                _logLoginFailedWrongPassword(logger, request.Email, null);
+                return null;
+            }
+
+            user.FailedLoginAttempts = 0;
+            user.LockoutEnd = null;
+            db.SaveChanges();
+
             _logUserLoggedIn(logger, request.Email, null);
             return new AuthUserResponse(user.Id.ToString(), user.Email);
-        } 
+        }
 
         public string? GenerateTokenFor(AuthUserResponse user, params string[] scopes)
         {
