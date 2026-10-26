@@ -22,6 +22,9 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Gateway.IntegrationTests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Gateway.Core\Gateway.Core.csproj" />
     <ProjectReference Include="..\..\ServiceDefaults\ServiceDefaults.csproj" />
   </ItemGroup>

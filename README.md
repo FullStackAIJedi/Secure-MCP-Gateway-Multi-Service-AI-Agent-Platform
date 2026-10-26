@@ -1,5 +1,8 @@
 # Secure MCP Gateway — Multi-Service AI Agent Platform
 
+[![CI](https://github.com/FullStackAIJedi/Secure-MCP-Gateway-Multi-Service-AI-Agent-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/FullStackAIJedi/Secure-MCP-Gateway-Multi-Service-AI-Agent-Platform/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/FullStackAIJedi/Secure-MCP-Gateway-Multi-Service-AI-Agent-Platform/branch/main/graph/badge.svg)](https://codecov.io/gh/FullStackAIJedi/Secure-MCP-Gateway-Multi-Service-AI-Agent-Platform)
+
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![C#](https://img.shields.io/badge/C%23-13.0-239120?logo=csharp&logoColor=white)](https://learn.microsoft.com/dotnet/csharp/)
 [![ASP.NET Core](https://img.shields.io/badge/ASP.NET%20Core-10.0-512BD4?logo=dotnet&logoColor=white)](https://learn.microsoft.com/aspnet/core/)
@@ -7,8 +10,9 @@
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-1.17.0-425CC7?logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Tests](https://img.shields.io/badge/tests-automated-brightgreen)](./tests)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
+**Tests:** [![Total](https://img.shields.io/badge/total-365-brightgreen)](./tests) [![Agent](https://img.shields.io/badge/agent-28-blue)](./tests/Agent.IntegrationTests) [![Gateway](https://img.shields.io/badge/gateway-157-blue)](./tests/Gateway.IntegrationTests) [![TaskService](https://img.shields.io/badge/taskservice-60-blue)](./tests/TaskService.IntegrationTests) [![DocumentService](https://img.shields.io/badge/documentservice-76-blue)](./tests/DocumentService.IntegrationTests)
 
 A production-inspired reference implementation of a **Model Context Protocol (MCP) gateway** that securely brokers AI agent tool calls across multiple downstream services—with human-in-the-loop approval, granular scope-based authorization, rate limiting, and full OpenTelemetry observability.
 
@@ -569,6 +573,21 @@ The documented test groups include:
 Coverage includes expired and malformed tokens, wrong signatures/issuers/audiences, tampering, unsupported algorithms, missing expiration, future `nbf`, very long tokens, claims and scopes, unknown tool names, case sensitivity, injection-like tool names, and retry behavior.
 
 These counts are approximate where indicated and reflect the supplied project notes.
+
+### Gateway.IntegrationTests — HTTP-level tests
+
+The HTTP-level tests use `WebApplicationFactory<Program>` to exercise the real ASP.NET Core pipeline (middleware order, authentication, authorization, rate limiting, and antiforgery) without requiring Docker.
+
+The tests in `HttpLevelTests.cs` verify:
+
+- `401 Unauthorized` for `/api/v1/tasks` without a token.
+- `403 Forbidden` for `/api/v1/security/audit-logs` with a read-only token (requires `mcp.admin`).
+- `403 Forbidden` for `/api/v1/internal/delete-task` with a write-only token (requires `mcp.admin`).
+- `403 Forbidden` for `/api/v1/internal/delete-document` with a write-only token (requires `mcp.admin`).
+- `403 Forbidden` for `POST /api/v1/tasks` with a read-only token (requires `mcp.tools.write`).
+- `429 Too Many Requests` after 100 requests per minute to `/mcp`.
+
+These tests use an in-memory `UserDbContext` and a `Testing` environment. Destructive-operation endpoints are tested at the authorization layer; downstream MCP calls are exercised in the downstream service test projects.
 
 ### TaskService.IntegrationTests — Task CRUD
 

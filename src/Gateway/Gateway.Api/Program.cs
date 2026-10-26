@@ -133,7 +133,10 @@ builder.Services.AddMcpServer()
     .WithHttpTransport()
     .WithToolsFromAssembly();
 
-builder.AddNpgsqlDbContext<UserDbContext>("userdb");
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.AddNpgsqlDbContext<UserDbContext>("userdb");
+}
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
 builder.Services.AddOpenApi();
@@ -149,7 +152,11 @@ app.UseStatusCodePages();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
-    await db.Database.MigrateAsync();
+
+    if (!app.Environment.IsEnvironment("Testing"))
+    {
+        await db.Database.MigrateAsync();
+    }
 }
 
 app.UseCors("Client");
