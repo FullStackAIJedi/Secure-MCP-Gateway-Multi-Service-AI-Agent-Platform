@@ -28,6 +28,63 @@ async function tryRefresh(): Promise<boolean> {
   return res.ok;
 }
 
+// export async function apiFetch<T>(
+//   path: string,
+//   init?: RequestInit,
+// ): Promise<T> {
+//   const csrfToken = getCsrfToken();
+
+//   const res = await fetch(`${API_BASE}${path}`, {
+//     ...init,
+//     credentials: "include",
+//     headers: {
+//       "Content-Type": "application/json",
+//       ...(csrfToken ? { "X-XSRF-TOKEN": csrfToken } : {}),
+//       ...init?.headers,
+//     },
+//   });
+
+//   if (res.status !== 401) {
+//     if (!res.ok) throw new Error(`API error: ${res.status}`);
+//     if (res.status === 204) return undefined as T;
+//     return res.json() as Promise<T>;
+//   }
+
+//   if (!isRefreshing) {
+//     isRefreshing = true;
+//     try {
+//       const ok = await tryRefresh();
+//       if (!ok) {
+//         window.location.href = "/login";
+//         throw new Error("Session expired");
+//       }
+//       onRefreshed();
+//     } finally {
+//       isRefreshing = false;
+//     }
+//   }
+
+//   return new Promise<T>((resolve, reject) => {
+//     subscribeRefresh(async () => {
+//       try {
+//         const retryRes = await fetch(`${API_BASE}${path}`, {
+//           ...init,
+//           credentials: "include",
+//           headers: {
+//             "Content-Type": "application/json",
+//             ...(getCsrfToken() ? { "X-XSRF-TOKEN": getCsrfToken()! } : {}),
+//             ...init?.headers,
+//           },
+//         });
+//         if (!retryRes.ok) throw new Error(`API error: ${retryRes.status}`);
+//         if (retryRes.status === 204) resolve(undefined as T);
+//         else resolve((await retryRes.json()) as T);
+//       } catch (err) {
+//         reject(err);
+//       }
+//     });
+//   });
+// }
 export async function apiFetch<T>(
   path: string,
   init?: RequestInit,
@@ -47,7 +104,11 @@ export async function apiFetch<T>(
   if (res.status !== 401) {
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     if (res.status === 204) return undefined as T;
-    return res.json() as Promise<T>;
+
+    // Handle empty body (200 with no content)
+    const text = await res.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
   }
 
   if (!isRefreshing) {
@@ -77,8 +138,11 @@ export async function apiFetch<T>(
           },
         });
         if (!retryRes.ok) throw new Error(`API error: ${retryRes.status}`);
-        if (retryRes.status === 204) resolve(undefined as T);
-        else resolve((await retryRes.json()) as T);
+        if (retryRes.status === 204) return resolve(undefined as T);
+
+        const retryText = await retryRes.text();
+        if (!retryText) return resolve(undefined as T);
+        resolve(JSON.parse(retryText) as T);
       } catch (err) {
         reject(err);
       }

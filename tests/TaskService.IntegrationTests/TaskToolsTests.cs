@@ -1,11 +1,13 @@
 namespace TaskService.IntegrationTests
 {
-    using System.Diagnostics.CodeAnalysis; 
+    using System.Diagnostics.CodeAnalysis;
+
     using Microsoft.EntityFrameworkCore;
 
     using Xunit;
+
     using FluentAssertions;
- 
+
     using TaskService.Api.Data;
     using TaskService.Api.Tools;
     using TaskService.Api.Entities;
@@ -34,6 +36,27 @@ namespace TaskService.IntegrationTests
         {
             await _db.DisposeAsync();
         }
+
+        // ─────────────────────────────────────────────────────────────
+        // Helpers for string-returning tools (CompleteTask / DeleteTask)
+        // ─────────────────────────────────────────────────────────────
+
+        private static void ShouldBeSuccess(string result, string expectedFragment)
+        {
+            result.Should().NotBeNull();
+            result.Should().NotStartWith("Error:");
+            result.Should().Contain(expectedFragment);
+        }
+
+        private static void ShouldBeError(string result)
+        {
+            result.Should().NotBeNull();
+            result.Should().StartWith("Error:");
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // CreateTask
+        // ─────────────────────────────────────────────────────────────
 
         [Fact]
         public async Task CreateTaskStoresTaskWithCorrectOwner()
@@ -128,6 +151,10 @@ namespace TaskService.IntegrationTests
             task.Description.Should().Be("Hello");
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // ListTasks
+        // ─────────────────────────────────────────────────────────────
+
         [Fact]
         public async Task ListTasksReturnsOnlyUserTasks()
         {
@@ -185,6 +212,10 @@ namespace TaskService.IntegrationTests
             tasks.Single(t => t.Id == t2.Id).IsComplete.Should().BeTrue();
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // CompleteTask  (returns string now)
+        // ─────────────────────────────────────────────────────────────
+
         [Fact]
         public async Task CompleteTaskMarksTaskAsComplete()
         {
@@ -192,7 +223,8 @@ namespace TaskService.IntegrationTests
 
             var result = await _tools.CompleteTask("user-1", task.Id, default);
 
-            result.Should().BeTrue();
+            // CHANGED: was result.Should().BeTrue(); now string
+            ShouldBeSuccess(result, "marked complete");
 
             var updated = await _db.Tasks.FindAsync(task.Id);
             updated.Should().NotBeNull();
@@ -206,26 +238,31 @@ namespace TaskService.IntegrationTests
 
             var result = await _tools.CompleteTask("user-2", task.Id, default);
 
-            result.Should().BeFalse();
+            // CHANGED: was result.Should().BeFalse(); now string error
+            ShouldBeError(result);
         }
 
         [Fact]
-        public async Task CompleteTaskReturnsFalseForNonexistentId()
+        public async Task CompleteTaskReturnsErrorForNonexistentId()
         {
             var result = await _tools.CompleteTask("user-1", 99999, default);
-            result.Should().BeFalse();
+
+            // CHANGED: was BeFalse; now "Error: task not found."
+            ShouldBeError(result);
+            result.Should().Contain("not found");
         }
 
         [Fact]
-        public async Task CompleteTaskTwiceSucceedsBothTimes()
+        public async Task CompleteTaskTwiceReturnsAlreadyCompleteSecondTime()
         {
             var task = await _tools.CreateTask("user-1", "Task A", "", default);
 
             var first = await _tools.CompleteTask("user-1", task.Id, default);
             var second = await _tools.CompleteTask("user-1", task.Id, default);
 
-            first.Should().BeTrue();
-            second.Should().BeTrue();
+            // CHANGED: first "marked complete", second "already complete"
+            ShouldBeSuccess(first, "marked complete");
+            ShouldBeSuccess(second, "already complete");
         }
 
         [Fact]
@@ -241,15 +278,21 @@ namespace TaskService.IntegrationTests
         }
 
         [Fact]
-        public async Task CompleteTaskAfterDeleteReturnsFalse()
+        public async Task CompleteTaskAfterDeleteReturnsError()
         {
             var task = await _tools.CreateTask("user-1", "Task A", "", default);
             await _tools.DeleteTask("user-1", task.Id, default);
 
             var result = await _tools.CompleteTask("user-1", task.Id, default);
 
-            result.Should().BeFalse();
+            // CHANGED: was BeFalse; now error string
+            ShouldBeError(result);
+            result.Should().Contain("not found");
         }
+
+        // ─────────────────────────────────────────────────────────────
+        // DeleteTask  (returns string now)
+        // ─────────────────────────────────────────────────────────────
 
         [Fact]
         public async Task DeleteTaskOnlyDeletesOwnTasks()
@@ -258,7 +301,8 @@ namespace TaskService.IntegrationTests
 
             var result = await _tools.DeleteTask("user-2", task.Id, default);
 
-            result.Should().BeFalse();
+            // CHANGED: was BeFalse; now error string
+            ShouldBeError(result);
 
             var stillExists = await _db.Tasks.FindAsync(task.Id);
             stillExists.Should().NotBeNull();
@@ -271,22 +315,25 @@ namespace TaskService.IntegrationTests
 
             var result = await _tools.DeleteTask("user-1", task.Id, default);
 
-            result.Should().BeTrue();
+            // CHANGED: was BeTrue; now "deleted"
+            ShouldBeSuccess(result, "deleted");
 
             var deleted = await _db.Tasks.FindAsync(task.Id);
             deleted.Should().BeNull();
         }
 
         [Fact]
-        public async Task DeleteTaskTwiceReturnsFalseSecondTime()
+        public async Task DeleteTaskTwiceReturnsErrorSecondTime()
         {
             var task = await _tools.CreateTask("user-1", "Task A", "", default);
 
             var first = await _tools.DeleteTask("user-1", task.Id, default);
             var second = await _tools.DeleteTask("user-1", task.Id, default);
 
-            first.Should().BeTrue();
-            second.Should().BeFalse();
+            // CHANGED: first success, second error
+            ShouldBeSuccess(first, "deleted");
+            ShouldBeError(second);
+            second.Should().Contain("not found");
         }
 
         [Fact]
@@ -302,10 +349,13 @@ namespace TaskService.IntegrationTests
         }
 
         [Fact]
-        public async Task DeleteTaskReturnsFalseForNonexistentId()
+        public async Task DeleteTaskReturnsErrorForNonexistentId()
         {
             var result = await _tools.DeleteTask("user-1", 99999, default);
-            result.Should().BeFalse();
+
+            // CHANGED: was BeFalse; now error
+            ShouldBeError(result);
+            result.Should().Contain("not found");
         }
 
         [Fact]
@@ -316,8 +366,13 @@ namespace TaskService.IntegrationTests
 
             var result = await _tools.DeleteTask("user-1", task.Id, default);
 
-            result.Should().BeTrue();
+            // CHANGED: was BeTrue; now "deleted"
+            ShouldBeSuccess(result, "deleted");
         }
+
+        // ─────────────────────────────────────────────────────────────
+        // SearchTasks
+        // ─────────────────────────────────────────────────────────────
 
         [Fact]
         public async Task SearchTasksReturnsMatchingTitles()
@@ -342,7 +397,7 @@ namespace TaskService.IntegrationTests
 
             results.Should().HaveCount(1);
             results.Should().OnlyContain(t => t.OwnerSubjectId == "user-1");
-        } 
+        }
 
         [Fact]
         public async Task SearchTasksWithEmptyKeywordReturnsAllUserTasks()
@@ -371,7 +426,7 @@ namespace TaskService.IntegrationTests
 
             var results = await _tools.SearchTasks("user-1", "mil", default);
             results.Should().HaveCount(1);
-        } 
+        }
 
         [Fact]
         public async Task SearchTasksIncludesCompletedTasks()
@@ -389,7 +444,51 @@ namespace TaskService.IntegrationTests
         {
             var results = await _tools.SearchTasks("user-1", "anything", default);
             results.Should().BeEmpty();
-        } 
+        }
+
+        [Fact]
+        public async Task SearchTasksReturnsSortedByCreatedAtDescending()
+        {
+            await _tools.CreateTask("user-1", "Match A", "", default);
+            await Task.Delay(10);
+            await _tools.CreateTask("user-1", "Match B", "", default);
+
+            var results = await _tools.SearchTasks("user-1", "Match", default);
+
+            results.Should().HaveCount(2);
+            results[0].Title.Should().Be("Match B");
+            results[1].Title.Should().Be("Match A");
+        }
+
+        [Fact]
+        public async Task SearchTasksWithSqlInjectionKeywordDoesNotThrowOrLeakData()
+        {
+            await _tools.CreateTask("user-1", "Buy milk", "", default);
+
+            var injection = "'; DROP TABLE Tasks; --";
+
+            var results = await _tools.SearchTasks("user-1", injection, default);
+
+            results.Should().BeEmpty();
+
+            var allTasks = await _tools.ListTasks("user-1", default);
+            allTasks.Should().HaveCount(1);
+            allTasks[0].Title.Should().Be("Buy milk");
+        }
+
+        [Fact]
+        public async Task SearchTasksAfterDeleteDoesNotFindDeleted()
+        {
+            var t = await _tools.CreateTask("user-1", "Unique", "", default);
+            await _tools.DeleteTask("user-1", t.Id, default);
+
+            var results = await _tools.SearchTasks("user-1", "Unique", default);
+            results.Should().BeEmpty();
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // GetTask
+        // ─────────────────────────────────────────────────────────────
 
         [Fact]
         public async Task GetTaskReturnsOwnTask()
@@ -450,6 +549,10 @@ namespace TaskService.IntegrationTests
             var result = await _tools.GetTask("user-1", task.Id, default);
             result.Should().BeNull();
         }
+
+        // ─────────────────────────────────────────────────────────────
+        // Lifecycle / cross-operation
+        // ─────────────────────────────────────────────────────────────
 
         [Fact]
         public async Task CreateThenGetReturnsSameData()
@@ -533,7 +636,8 @@ namespace TaskService.IntegrationTests
 
             var result = await _tools.CompleteTask("user-2", t.Id, default);
 
-            result.Should().BeFalse();
+            // CHANGED: was BeFalse; now error string
+            ShouldBeError(result);
 
             var unchanged = await _db.Tasks.FindAsync(t.Id);
             unchanged!.IsComplete.Should().BeFalse();
@@ -632,44 +736,133 @@ namespace TaskService.IntegrationTests
             fetched.Description.Should().Be("Original desc");
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // UpdateTask  (new — covers the actual feature)
+        // ─────────────────────────────────────────────────────────────
+
         [Fact]
-        public async Task SearchTasksReturnsSortedByCreatedAtDescending()
+        public async Task UpdateTaskRenamesOnly()
         {
-            await _tools.CreateTask("user-1", "Match A", "", default);
-            await Task.Delay(10);
-            await _tools.CreateTask("user-1", "Match B", "", default);
+            await _tools.CreateTask("user-1", "task 2", "desc", default);
 
-            var results = await _tools.SearchTasks("user-1", "Match", default);
+            var result = await _tools.UpdateTask("user-1", "task 2", "Second task", default);
 
-            results.Should().HaveCount(2);
-            results[0].Title.Should().Be("Match B");
-            results[1].Title.Should().Be("Match A");
+            ShouldBeSuccess(result, "Task updated successfully");
+
+            var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
+            updated.Title.Should().Be("Second task");
+            updated.Description.Should().Be("desc");
         }
 
         [Fact]
-        public async Task SearchTasksWithSqlInjectionKeywordDoesNotThrowOrLeakData()
-        { 
-            await _tools.CreateTask("user-1", "Buy milk", "", default);
-             
-            var injection = "'; DROP TABLE Tasks; --";
-             
-            var results = await _tools.SearchTasks("user-1", injection, default);
+        public async Task UpdateTaskChangesDescriptionOnly()
+        {
+            await _tools.CreateTask("user-1", "task 2", "old", default);
 
-            results.Should().BeEmpty();
-             
-            var allTasks = await _tools.ListTasks("user-1", default);
-            allTasks.Should().HaveCount(1);
-            allTasks[0].Title.Should().Be("Buy milk");
+            var result = await _tools.UpdateTask(
+                "user-1", "task 2", newTitle: null, description: "new desc", default);
+
+            ShouldBeSuccess(result, "Task updated successfully");
+
+            var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
+            updated.Title.Should().Be("task 2");
+            updated.Description.Should().Be("new desc");
         }
 
         [Fact]
-        public async Task SearchTasksAfterDeleteDoesNotFindDeleted()
+        public async Task UpdateTaskChangesBothTitleAndDescription()
         {
-            var t = await _tools.CreateTask("user-1", "Unique", "", default);
-            await _tools.DeleteTask("user-1", t.Id, default);
+            await _tools.CreateTask("user-1", "old title", "old desc", default);
 
-            var results = await _tools.SearchTasks("user-1", "Unique", default);
-            results.Should().BeEmpty();
+            var result = await _tools.UpdateTask(
+                "user-1", "old title", "new title", "new desc", default);
+
+            ShouldBeSuccess(result, "Task updated successfully");
+
+            var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
+            updated.Title.Should().Be("new title");
+            updated.Description.Should().Be("new desc");
+        }
+
+        [Fact]
+        public async Task UpdateTaskWithNoChangesReturnsError()
+        {
+            await _tools.CreateTask("user-1", "task 2", "desc", default);
+
+            var result = await _tools.UpdateTask("user-1", "task 2", null, null, default);
+
+            ShouldBeError(result);
+            result.Should().Contain("nothing to update");
+        }
+
+        [Fact]
+        public async Task UpdateTaskWithEmptyCurrentTitleReturnsError()
+        {
+            var result = await _tools.UpdateTask("user-1", "", "new title", null, default);
+
+            ShouldBeError(result);
+            result.Should().Contain("currentTitle");
+        }
+
+        [Fact]
+        public async Task UpdateTaskForUnknownTitleReturnsErrorWithAvailableTitles()
+        {
+            await _tools.CreateTask("user-1", "task 1", "", default);
+            await _tools.CreateTask("user-1", "task 2", "", default);
+
+            var result = await _tools.UpdateTask("user-1", "task 99", "X", null, default);
+
+            ShouldBeError(result);
+            result.Should().Contain("task 99");
+            result.Should().Contain("Available titles");
+            result.Should().Contain("task 1");
+            result.Should().Contain("task 2");
+        }
+
+        [Fact]
+        public async Task UpdateTaskDoesNotAffectOtherUsersTasks()
+        {
+            await _tools.CreateTask("user-1", "shared-title", "mine", default);
+            await _tools.CreateTask("user-2", "shared-title", "theirs", default);
+
+            var result = await _tools.UpdateTask("user-1", "shared-title", "renamed", null, default);
+
+            ShouldBeSuccess(result, "Task updated successfully");
+
+            var user1Task = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
+            var user2Task = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-2", default);
+
+            user1Task.Title.Should().Be("renamed");
+            user2Task.Title.Should().Be("shared-title");
+        }
+
+        [Fact]
+        public async Task UpdateTaskWithEmptyStringNewTitleKeepsCurrentTitle()
+        {
+            await _tools.CreateTask("user-1", "task 2", "desc", default);
+
+            var result = await _tools.UpdateTask(
+                "user-1", "task 2", newTitle: "", description: "changed", default);
+
+            ShouldBeSuccess(result, "Task updated successfully");
+
+            var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
+            updated.Title.Should().Be("task 2");
+            updated.Description.Should().Be("changed");
+        }
+
+        [Fact]
+        public async Task UpdateTaskCanClearDescriptionWithEmptyString()
+        {
+            await _tools.CreateTask("user-1", "task 2", "old desc", default);
+
+            var result = await _tools.UpdateTask(
+                "user-1", "task 2", newTitle: null, description: "", default);
+
+            ShouldBeSuccess(result, "Task updated successfully");
+
+            var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
+            updated.Description.Should().BeEmpty();
         }
     }
 }

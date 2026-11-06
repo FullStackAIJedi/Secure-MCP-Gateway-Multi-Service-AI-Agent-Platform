@@ -134,21 +134,28 @@ interface Message {
   tools?: string[];
   requiresApproval?: boolean;
   toolName?: string;
-  arguments?: string;
+  arguments?: Record<string, unknown>;
   approved?: boolean;
 }
 
 interface ApprovalPayload {
   requiresApproval: boolean;
   toolName: string;
-  arguments: string;
+  arguments: Record<string, unknown>;
 }
 
 function tryParseApproval(reply: string): ApprovalPayload | null {
   try {
     const obj = JSON.parse(reply);
     if (obj && obj.requiresApproval === true) {
-      return obj as ApprovalPayload;
+      return {
+        requiresApproval: true,
+        toolName: obj.toolName,
+        arguments:
+          typeof obj.arguments === "string"
+            ? JSON.parse(obj.arguments)
+            : (obj.arguments ?? {}),
+      };
     }
   } catch {}
   return null;
@@ -237,7 +244,7 @@ export function Chat() {
           },
           body: JSON.stringify({
             toolName: msg.toolName,
-            arguments: msg.arguments,
+            arguments: JSON.stringify(msg.arguments),
           }),
         });
 

@@ -18,7 +18,7 @@ const SearchContainer = styled.div`
 
 const SearchInput = styled.input`
   flex: 1;
-  min-width: 0;
+  min-width: 23rem;
   height: 44px;
   box-sizing: border-box;
   padding: 0 12px;
@@ -77,7 +77,7 @@ export function Documents() {
       ) : deferredKeyword.trim().length > 0 ? (
         <p>No documents found.</p>
       ) : (
-        <p>Start typing to search documents.</p>
+        <p> </p>
       )}
     </Container>
   );

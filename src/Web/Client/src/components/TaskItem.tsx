@@ -29,10 +29,15 @@ export function TaskItem({ task, onComplete, isPending }: TaskItemProps) {
       {!task.isComplete && (
         <Button
           size="sm"
+          backgroundColor="transparent"
+          color="#f35212"
+          border="1px solid #f35212"
+          hoverBackgroundColor="#f35212"
+          hoverColor="#ffffff"
           onClick={() => onComplete(task.id)}
           disabled={isPending}
         >
-          {isPending ? "Completing..." : "Complete"}
+          {isPending ? "Finishing..." : "Finish"}
         </Button>
       )}
     </TaskRow>

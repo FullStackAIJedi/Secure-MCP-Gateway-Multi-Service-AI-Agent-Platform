@@ -9,6 +9,8 @@ using Agent.Api.Services.Abstractions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Hosting.Observability;
 
+using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
+
 namespace Agent.Api.Services.Implementations;
 
 public sealed class AgentService(
@@ -32,84 +34,140 @@ public sealed class AgentService(
             "Session {SessionId}: discovered {ToolCount} tools");
 
     public async Task<(string Reply, List<string> ToolsUsed)> ChatAsync(
-        string sessionId, string message, string jwt, CancellationToken cancellationToken)
+    string sessionId, string message, string jwt, CancellationToken cancellationToken)
     {
         var model = configuration["Ollama:Model"] ?? "llama3.2";
 
         await using var mcpClient = await mcpFactory.CreateAsync(jwt, cancellationToken);
-        var tools = await mcpClient.ListToolsAsync(cancellationToken);
+        var mcpTools = await mcpClient.ListToolsAsync(cancellationToken);
 
-        _logToolsDiscovered(logger, sessionId, tools.Count, null);
+        _logToolsDiscovered(logger, sessionId, mcpTools.Count, null);
 
         var chatClient = chatFactory.Create(model);
 
-        var toolsDescription = string.Join("\n", tools.Select(t =>
-            $"- {t.Name}: {t.Description}"));
+        var chatTools = mcpTools
+            .Select(t =>
+            {
+                var toolName = t.Name;
+                return (AITool)AIFunctionFactory.Create(
+                    async (IDictionary<string, object?> args, CancellationToken ct) =>
+                    {
+                        var dict = args is Dictionary<string, object?> d
+                            ? d
+                            : new Dictionary<string, object?>(args);
 
-        var systemPrompt = BuildSystemPrompt(toolsDescription);
+                        return await mcpClient.CallToolAsync(toolName, dict, ct);
+                    },
+                    name: toolName,
+                    description: t.Description);
+            })
+            .ToList();
+
+        var chatOptions = new ChatOptions
+        {
+            ModelId = model,
+            Tools = chatTools,
+            ToolMode = ChatToolMode.Auto
+        };
 
         var history = _sessions.GetOrAdd(sessionId, _ => new List<ChatMessage>
         {
-            new(ChatRole.System, systemPrompt)
+            new(ChatRole.System, BuildSystemPrompt())
         });
 
         history.Add(new ChatMessage(ChatRole.User, message));
 
-        using var chatActivity = AgentTelemetry.Source.StartActivity(
-            GenAiAttributes.OperationChat,
-            ActivityKind.Client);
-        chatActivity?.AddGenAiChatAttributes(model);
-        chatActivity?.SetTag(McpAttributes.SessionId, sessionId);
-
-        var chatStopwatch = Stopwatch.StartNew();
-
-        ChatResponse response;
-        try
-        {
-            response = await chatClient.GetResponseAsync(
-                history,
-                new ChatOptions { ModelId = model },
-                cancellationToken);
-
-            chatStopwatch.Stop();
-
-            chatActivity?.RecordChatDuration(model, chatStopwatch.Elapsed.TotalMilliseconds);
-            chatActivity?.RecordTokenUsage(
-                model,
-                response.Usage?.InputTokenCount is long input ? (int)input : null,
-                response.Usage?.OutputTokenCount is long output ? (int)output : null);
-        }
-        catch (Exception ex)
-        {
-            chatStopwatch.Stop();
-            chatActivity?.SetError(ex);
-            throw;
-        }
-
-        var reply = response.Text;
         var toolsUsed = new List<string>();
-        var results = new List<string>();
+        string? lastToolResult = null;
 
-        var toolCalls = ParseAllToolCalls(reply);
+        const int maxSteps = 5;
 
-        if (toolCalls.Count > 0)
+        for (var step = 0; step < maxSteps; step++)
         {
-            foreach (var (toolName, arguments) in toolCalls)
+            using var chatActivity = AgentTelemetry.Source.StartActivity(
+                GenAiAttributes.OperationChat,
+                ActivityKind.Client);
+            chatActivity?.AddGenAiChatAttributes(model);
+            chatActivity?.SetTag(McpAttributes.SessionId, sessionId);
+
+            var chatStopwatch = Stopwatch.StartNew();
+
+            ChatResponse response;
+            try
+            {   //llm call
+                response = await chatClient.GetResponseAsync(
+                    history,
+                    chatOptions,
+                    cancellationToken);
+
+                chatStopwatch.Stop();
+
+                chatActivity?.RecordChatDuration(model, chatStopwatch.Elapsed.TotalMilliseconds);
+                chatActivity?.RecordTokenUsage(
+                    model,
+                    response.Usage?.InputTokenCount is long input ? (int)input : null,
+                    response.Usage?.OutputTokenCount is long output ? (int)output : null);
+            }
+            catch (Exception ex)
             {
-                var toolResult = await InvokeToolAsync(
-                    mcpClient, toolName, arguments, cancellationToken);
-                toolsUsed.Add(toolName);
-                results.Add(toolResult);
+                chatStopwatch.Stop();
+                chatActivity?.SetError(ex);
+                throw;
             }
 
-            chatActivity?.RecordToolCalls(toolsUsed.Count);
-
-            var combinedResults = string.Join("\n", results);
-
-            if (!string.IsNullOrEmpty(combinedResults)
-                && combinedResults.StartsWith("APPROVAL_REQUIRED:", StringComparison.Ordinal))
+            var functionCalls = response.Messages
+                .SelectMany(m => m.Contents)
+                .OfType<FunctionCallContent>()
+                .ToList();
+             
+            if (functionCalls.Count == 0)
             {
-                var parts = combinedResults.Split(':', 3);
+                var finalText = lastToolResult ?? response.Text ?? string.Empty;
+                _logSessionActivity(logger, sessionId, history.Count, null);
+                return (finalText, toolsUsed);
+            }
+
+            history.AddRange(response.Messages);
+
+            var toolResults = new List<AIContent>();
+            var toolNames = new List<string>();
+
+            foreach (var call in functionCalls)
+            {
+                var toolName = call.Name;
+                var arguments = ParseFunctionArguments(call.Arguments);
+
+                toolsUsed.Add(toolName);
+                toolNames.Add(toolName);
+
+                string result;
+                try
+                {
+                    result = await mcpClient.CallToolAsync(
+                        toolName, arguments, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    result = $"Error: {ex.Message}";
+                }
+
+                lastToolResult = result;
+                toolResults.Add(new FunctionResultContent(call.CallId, result));
+            }
+
+            history.Add(new ChatMessage(ChatRole.Tool, toolResults));
+
+            var combined = string.Join("\n", toolResults
+                .OfType<FunctionResultContent>()
+                .Select(r => r.Result?.ToString() ?? string.Empty));
+             
+            var hasError = toolResults
+                .OfType<FunctionResultContent>()
+                .Any(r => r.Result?.ToString()?.StartsWith("Error:", StringComparison.Ordinal) == true);
+             
+            if (combined.StartsWith("APPROVAL_REQUIRED:", StringComparison.Ordinal))
+            {
+                var parts = combined.Split(':', 3);
                 var approvalJson = JsonSerializer.Serialize(new
                 {
                     requiresApproval = true,
@@ -117,70 +175,23 @@ public sealed class AgentService(
                     arguments = parts[2]
                 });
 
-                history.Add(new ChatMessage(ChatRole.Assistant, reply));
-                history.Add(new ChatMessage(ChatRole.User, $"Tool results:\n{combinedResults}"));
                 _logSessionActivity(logger, sessionId, history.Count, null);
-
                 return (approvalJson, toolsUsed);
             }
-
-            history.Add(new ChatMessage(ChatRole.Assistant, reply));
-            history.Add(new ChatMessage(ChatRole.User, $"Tool results:\n{combinedResults}"));
-
-            using var finalActivity = AgentTelemetry.Source.StartActivity(
-                GenAiAttributes.OperationChat,
-                ActivityKind.Client);
-            finalActivity?.AddGenAiChatAttributes(model);
-            finalActivity?.SetTag(McpAttributes.SessionId, sessionId);
-
-            var finalStopwatch = Stopwatch.StartNew();
-
-            ChatResponse finalResponse;
-            try
+             
+            if (IsFinalTool(toolNames) && !hasError)
             {
-                finalResponse = await chatClient.GetResponseAsync(
-                    history,
-                    new ChatOptions { ModelId = model },
-                    cancellationToken);
-
-                finalStopwatch.Stop();
-
-                finalActivity?.RecordChatDuration(model, finalStopwatch.Elapsed.TotalMilliseconds);
-                finalActivity?.RecordTokenUsage(
-                    model,
-                    finalResponse.Usage?.InputTokenCount is long inputTokens ? (int)inputTokens : null,
-                    finalResponse.Usage?.OutputTokenCount is long outputTokens ? (int)outputTokens : null);
-            }
-            catch (Exception ex)
-            {
-                finalStopwatch.Stop();
-                finalActivity?.SetError(ex);
-                throw;
-            }
-
-            var finalText = finalResponse.Text;
-
-            if (string.IsNullOrWhiteSpace(finalText) ||
-                finalText.TrimStart().StartsWith('{') ||
-                finalText.TrimStart().StartsWith('['))
-            {
-                finalText = combinedResults;
-            }
-            else if (ParseAllToolCalls(finalText).Count > 0)
-            {
-                finalText = combinedResults;
-            }
-
-            _logSessionActivity(logger, sessionId, history.Count, null);
-            return (finalText, toolsUsed);
+                _logSessionActivity(logger, sessionId, history.Count, null);
+                return (combined, toolsUsed);
+            } 
         }
 
         _logSessionActivity(logger, sessionId, history.Count, null);
-        return (reply, toolsUsed);
+        return (lastToolResult ?? "Error: too many steps", toolsUsed);
     }
 
     public async Task<string> ExecuteApprovedToolAsync(
-        string toolName, string arguments, string jwt, CancellationToken cancellationToken)
+    string toolName, string arguments, string jwt, CancellationToken cancellationToken)
     {
         using var doc = JsonDocument.Parse(arguments);
         var id = doc.RootElement.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.Number
@@ -189,15 +200,15 @@ public sealed class AgentService(
 
         if (id is null)
             return "Error: missing 'id' in approval arguments";
-
-        var endpoint = toolName switch
+         
+        var (method, endpoint) = toolName switch
         {
-            "delete_task" => $"/api/v1/internal/delete-task?id={id}",
-            "delete_document" => $"/api/v1/internal/delete-document?id={id}",
-            _ => null
+            "delete_task" => (HttpMethod.Delete, $"/api/v1/tasks/{id}"),
+            "delete_document" => (HttpMethod.Delete, $"/api/v1/documents/{id}"),
+            _ => (null, (string?)null)
         };
 
-        if (endpoint is null)
+        if (method is null || endpoint is null)
             return $"Error: unsupported tool '{toolName}' for approval";
 
         using var approvalActivity = AgentTelemetry.Source.StartActivity(
@@ -215,7 +226,9 @@ public sealed class AgentService(
 
         try
         {
-            var response = await httpClient.PostAsync(endpoint, null, cancellationToken);
+            using var request = new HttpRequestMessage(method, endpoint);
+            var response = await httpClient.SendAsync(request, cancellationToken);
+
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -223,11 +236,8 @@ public sealed class AgentService(
                 return $"Error: {response.StatusCode} - {error}";
             }
 
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            using var resultDoc = JsonDocument.Parse(json);
-
             approvalActivity?.SetTag("outcome", "success");
-            return resultDoc.RootElement.GetProperty("result").GetString() ?? "Done";
+            return $"Done!";
         }
         catch (Exception ex)
         {
@@ -236,143 +246,39 @@ public sealed class AgentService(
         }
     }
 
-    internal static List<(string ToolName, Dictionary<string, object?> Arguments)> ParseAllToolCalls(
-        string text)
+    private static Dictionary<string, object?> ParseFunctionArguments(
+        IDictionary<string, object?>? args)
     {
-        var results = new List<(string, Dictionary<string, object?>)>();
-        var index = 0;
+        if (args is null) return new Dictionary<string, object?>();
 
-        while (index < text.Length)
-        {
-            var start = text.IndexOf('{', index);
-            if (start < 0) break;
-
-            var depth = 0;
-            var end = -1;
-            for (int i = start; i < text.Length; i++)
-            {
-                if (text[i] == '{') depth++;
-                else if (text[i] == '}')
-                {
-                    depth--;
-                    if (depth == 0) { end = i; break; }
-                }
-            }
-            if (end < 0) break;
-
-            var json = text.Substring(start, end - start + 1);
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                if (root.TryGetProperty("tool", out var toolProp))
-                {
-                    var toolName = toolProp.GetString() ?? string.Empty;
-                    var arguments = new Dictionary<string, object?>();
-
-                    if (root.TryGetProperty("arguments", out var argsProp))
-                    {
-                        foreach (var prop in argsProp.EnumerateObject())
-                        {
-                            arguments[prop.Name] = prop.Value.ValueKind switch
-                            {
-                                JsonValueKind.String => prop.Value.GetString(),
-                                JsonValueKind.Number => prop.Value.GetInt32(),
-                                JsonValueKind.True => true,
-                                JsonValueKind.False => false,
-                                _ => null
-                            };
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(toolName))
-                        results.Add((toolName, arguments));
-                }
-            }
-            catch
-            {
-                // Ignore malformed JSON — LLM may return partial text
-            }
-
-            index = end + 1;
-        }
-
-        return results;
+        return new Dictionary<string, object?>(args);
     }
 
-    private static async Task<string> InvokeToolAsync(
-        IMcpClient mcpClient,
-        string toolName,
-        Dictionary<string, object?> arguments,
-        CancellationToken cancellationToken)
+    private static bool IsFinalTool(List<string> toolNames)
     {
-        using var toolActivity = AgentTelemetry.Source.StartActivity(
-            $"tool.{toolName}",
-            ActivityKind.Client);
-        toolActivity?.SetTag(GenAiAttributes.ToolName, toolName);
-        toolActivity?.SetTag(McpAttributes.MethodName, McpAttributes.MethodToolsCall);
-        toolActivity?.SetTag(McpAttributes.ToolName, toolName);
-
-        var argsJson = JsonSerializer.Serialize(arguments);
-        Console.WriteLine($"[AGENT_TOOL] Invoking '{toolName}' with arguments: {argsJson}");
-
-        try
+        var finalTools = new HashSet<string>(StringComparer.Ordinal)
         {
-            var text = await mcpClient.CallToolAsync(toolName, arguments, cancellationToken);
+            "list_tasks", "list_documents",
+            "get_task", "get_document",
+            "create_task", "create_document",
+            "update_task", "update_document",
+            "complete_task",
+            "delete_task", "delete_document",
+            "search_tasks", "search_documents"
+        };
 
-            Console.WriteLine(
-                $"[AGENT_TOOL] '{toolName}' returned (len={text.Length}): " +
-                $"{text.Substring(0, Math.Min(300, text.Length))}");
-
-            toolActivity?.SetTag("outcome", "success");
-            return text;
-        }
-        catch (Exception ex)
-        {
-            toolActivity?.SetError(ex);
-            throw;
-        }
+        return toolNames.Count > 0 && toolNames.All(t => finalTools.Contains(t));
     }
 
-    private static string BuildSystemPrompt(string toolsDescription) =>
-        $@"You are an AI assistant with access to these tools:
-        {toolsDescription}
+    private static string BuildSystemPrompt() =>
+        """
+    /no_think
+    You are an AI assistant with access to tools for tasks and documents.
 
-        RULES:
-        1. When the user asks to create a task, respond with ONLY this JSON (no other text):
-           {{""tool"": ""create_task"", ""arguments"": {{""title"": ""<title>"", ""description"": ""<description>""}}}}
-           ALWAYS include both ""title"" and ""description"". If no description, use "".
-        2. When the user asks to see tasks, respond with ONLY:
-           {{""tool"": ""list_tasks"", ""arguments"": {{}}}}
-        3. When the user asks to complete a task, respond with ONLY:
-           {{""tool"": ""complete_task"", ""arguments"": {{""title"": ""<title>""}}}}
-        4. When the user asks to search tasks, respond with ONLY:
-           {{""tool"": ""search_tasks"", ""arguments"": {{""keyword"": ""...""}}}}
-        5. When the user asks to delete a task, respond with ONLY:
-           {{""tool"": ""delete_task"", ""arguments"": {{""title"": ""<title>""}}}}
-        6. When the user asks to add a document, respond with ONLY:
-           {{""tool"": ""add_document"", ""arguments"": {{""title"": ""<title>"", ""content"": ""<content>""}}}}
-           ALWAYS include both ""title"" and ""content"". If no content, use "".
-        7. When the user asks to search documents, respond with ONLY:
-           {{""tool"": ""search_documents"", ""arguments"": {{""keyword"": ""...""}}}}
-           ALWAYS include a non-empty ""keyword"". If the user didn't specify a keyword, respond with text asking for one.
-        8. When the user asks to get a document by title, respond with ONLY:
-           {{""tool"": ""get_document"", ""arguments"": {{""title"": ""<title>""}}}}
-           ALWAYS include the exact ""title"" the user mentioned.
-           If the user did not provide an exact title but you have a previous tool result from list_documents or search_documents, use the exact title from that result.
-           Do NOT say the title has a formatting issue. Just pass the title exactly as it appears.
-        9. When the user asks to delete a document by title, respond with ONLY:
-           {{""tool"": ""delete_document"", ""arguments"": {{""title"": ""<title>""}}}}
-           ALWAYS include the exact ""title"" the user mentioned.
-        10. Update document by its current title → {{""tool"": ""update_document"", ""arguments"": {{""currentTitle"": ""<exact current title>"", ""newTitle"": ""<new title or null>"", ""content"": ""<new content or null>""}}}}
-            - Use currentTitle from the user's request.
-            - If only renaming, set content to null.
-            - If only changing content, set newTitle to null.
-            - If both, set both.
-        11. If no tool matches the user request, respond with text explaining that you cannot help. DO NOT invent a tool.
-        12. If the user asks for multiple actions, respond with MULTIPLE JSON objects, one per line.
-        13. When the user asks to see ALL documents, respond with ONLY:
-            {{""tool"": ""list_documents"", ""arguments"": {{}}}}
-            Do NOT use search_documents when the user wants all documents.";
+    Use the tools via function calling. Do NOT respond with JSON in text.
+    Do NOT reformat tool results. Show them exactly as returned.
+
+    If the user asks something that requires a tool, call it.
+    If no tool matches, respond with text explaining you cannot help.
+    """;
 }

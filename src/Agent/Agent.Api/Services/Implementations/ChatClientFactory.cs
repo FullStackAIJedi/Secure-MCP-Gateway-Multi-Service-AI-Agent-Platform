@@ -1,8 +1,8 @@
 namespace Agent.Api.Services.Implementations;
 
 using Microsoft.Extensions.AI;
-
 using OpenAI;
+
 using Agent.Api.Services.Abstractions; 
 
 public sealed class ChatClientFactory(IConfiguration configuration) : IChatClientFactory

@@ -1,7 +1,7 @@
-﻿namespace DocumentService.Api.Contracts
+namespace DocumentService.Api.Contracts
 {
     public sealed record DocumentSummary(
         int Id,
         string Title,
-        string Content);
+        string Description);
 }

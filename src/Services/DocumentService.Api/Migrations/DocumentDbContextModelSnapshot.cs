@@ -25,7 +25,7 @@ namespace DocumentService.Api.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("DocumentService.Api.Data.Document", b =>
+            modelBuilder.Entity("DocumentService.Api.Entities.Document", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -33,15 +33,20 @@ namespace DocumentService.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector(768)");
+
+                    b.Property<string>("OwnerSubjectId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -50,12 +55,15 @@ namespace DocumentService.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Content");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Content"), "gin");
-                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Content"), new[] { "gin_trgm_ops" });
-
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Description");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Description"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Description"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex("OwnerSubjectId")
+                        .HasDatabaseName("IX_Documents_OwnerSubjectId");
 
                     b.HasIndex("Title");
 

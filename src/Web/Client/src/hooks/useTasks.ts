@@ -23,7 +23,7 @@ export function useCreateTaskMutation() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      toast.success("Task created");
+      toast.success("Task Created");
     },
   });
 }
@@ -38,7 +38,7 @@ export function useCompleteTaskMutation() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      toast.success("Task created");
+      toast.success("Task successfully completed");
     },
   });
 }

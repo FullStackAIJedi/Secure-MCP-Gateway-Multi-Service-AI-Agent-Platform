@@ -1,4 +1,4 @@
-﻿namespace Gateway.IntegrationTests
+namespace Gateway.IntegrationTests
 {
     using Gateway.Core.Scopes;
     using Gateway.Core.Policies;
@@ -68,9 +68,9 @@
         }
 
         [Fact]
-        public void AllToolsHas12Entries()
+        public void AllToolsHas13Entries()
         {
-            _registry.AllTools.Should().HaveCount(12);
+            _registry.AllTools.Should().HaveCount(13);
         }
     }
 }

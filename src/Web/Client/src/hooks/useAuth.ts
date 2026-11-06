@@ -30,7 +30,7 @@ export function useLoginMutation() {
       }),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.auth.me, data.user);
-      toast.success("Task created");
+      toast.success("Successfully Signed In");
     },
   });
 }
@@ -46,7 +46,7 @@ export function useRegisterMutation() {
       }),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.auth.me, data.user);
-      toast.success("Task created");
+      toast.success("Successfully Sign Up");
     },
   });
 }
@@ -55,8 +55,36 @@ export function useLogoutMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => apiFetch<void>("/api/v1/auth/logout", { method: "POST" }),
+    mutationFn: async () => {
+      try {
+        const csrfToken = document.cookie.match(
+          /(?:^|;\s*)XSRF-TOKEN=([^;]*)/,
+        )?.[1];
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL ?? "http://localhost:5000"}/api/v1/auth/logout`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              ...(csrfToken
+                ? { "X-XSRF-TOKEN": decodeURIComponent(csrfToken) }
+                : {}),
+            },
+          },
+        );
+        if (!res.ok) {
+          console.warn("Logout API returned:", res.status);
+        }
+      } catch (err) {
+        console.warn("Logout API failed:", err);
+      }
+    },
     onSuccess: () => {
+      queryClient.clear();
+      window.location.href = "/login";
+    },
+    onError: () => {
       queryClient.clear();
       window.location.href = "/login";
     },

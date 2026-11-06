@@ -74,6 +74,8 @@ export function Tasks() {
 
         <Button
           size="md"
+          backgroundColor="#3498db"
+          color="#ffffff"
           onClick={handleCreate}
           disabled={createTask.isPending}
         >

@@ -52,7 +52,10 @@ app.MapPost("/api/v1/agent/chat", async (
         return Results.Unauthorized();
 
     var (reply, toolsUsed) = await agent.ChatAsync(
-        request.SessionId, request.Message, jwt, cancellationToken);
+        request.SessionId,
+        request.Message,
+        jwt,
+        cancellationToken);
 
     return Results.Ok(new ChatResponse(reply, toolsUsed));
 });
