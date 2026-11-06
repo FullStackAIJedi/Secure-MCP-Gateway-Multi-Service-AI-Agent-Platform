@@ -26,7 +26,7 @@ namespace Gateway.IntegrationTests
         [Theory]
         [InlineData("create_task")]
         [InlineData("complete_task")]
-        [InlineData("add_document")]
+        [InlineData("create_document")]  
         [InlineData("update_document")]
         public void WriteToolsAreMappedToWrite(string tool)
         {

@@ -1,4 +1,4 @@
-﻿namespace Gateway.IntegrationTests
+namespace Gateway.IntegrationTests
 {
     using System.Collections;
     using System.Collections.Immutable;
@@ -59,7 +59,7 @@
             var all = AllScopes();
             (await _policy.IsAllowedAsync("u", "create_task", all, default)).Should().BeTrue();
             (await _policy.IsAllowedAsync("u", "complete_task", all, default)).Should().BeTrue();
-            (await _policy.IsAllowedAsync("u", "add_document", all, default)).Should().BeTrue();
+            (await _policy.IsAllowedAsync("u", "create_document", all, default)).Should().BeTrue();   // ← ПРАВИЛНО
             (await _policy.IsAllowedAsync("u", "update_document", all, default)).Should().BeTrue();
         }
 

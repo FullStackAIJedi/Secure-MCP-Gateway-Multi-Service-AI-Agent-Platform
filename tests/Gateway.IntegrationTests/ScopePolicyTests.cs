@@ -1,4 +1,4 @@
-﻿namespace Gateway.IntegrationTests
+namespace Gateway.IntegrationTests
 {
     using Xunit;
     using FluentAssertions;
@@ -35,7 +35,7 @@
         [Theory]
         [InlineData("create_task")]
         [InlineData("complete_task")]
-        [InlineData("add_document")]
+        [InlineData("create_document")]    
         [InlineData("update_document")]
         public async Task WriteToolsAreAllowed(string toolName)
         {

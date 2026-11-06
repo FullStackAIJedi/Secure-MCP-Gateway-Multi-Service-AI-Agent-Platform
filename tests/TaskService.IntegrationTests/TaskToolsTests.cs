@@ -736,10 +736,6 @@ namespace TaskService.IntegrationTests
             fetched.Description.Should().Be("Original desc");
         }
 
-        // ─────────────────────────────────────────────────────────────
-        // UpdateTask  (new — covers the actual feature)
-        // ─────────────────────────────────────────────────────────────
-
         [Fact]
         public async Task UpdateTaskRenamesOnly()
         {
@@ -747,7 +743,7 @@ namespace TaskService.IntegrationTests
 
             var result = await _tools.UpdateTask("user-1", "task 2", "Second task", default);
 
-            ShouldBeSuccess(result, "Task updated successfully");
+            ShouldBeSuccess(result, "Done");    
 
             var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
             updated.Title.Should().Be("Second task");
@@ -762,7 +758,7 @@ namespace TaskService.IntegrationTests
             var result = await _tools.UpdateTask(
                 "user-1", "task 2", newTitle: null, description: "new desc", default);
 
-            ShouldBeSuccess(result, "Task updated successfully");
+            ShouldBeSuccess(result, "Done");
 
             var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
             updated.Title.Should().Be("task 2");
@@ -777,7 +773,7 @@ namespace TaskService.IntegrationTests
             var result = await _tools.UpdateTask(
                 "user-1", "old title", "new title", "new desc", default);
 
-            ShouldBeSuccess(result, "Task updated successfully");
+            ShouldBeSuccess(result, "Done");   // ← от "Task updated successfully"
 
             var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
             updated.Title.Should().Be("new title");
@@ -827,7 +823,7 @@ namespace TaskService.IntegrationTests
 
             var result = await _tools.UpdateTask("user-1", "shared-title", "renamed", null, default);
 
-            ShouldBeSuccess(result, "Task updated successfully");
+            ShouldBeSuccess(result, "Done");
 
             var user1Task = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
             var user2Task = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-2", default);
@@ -844,7 +840,7 @@ namespace TaskService.IntegrationTests
             var result = await _tools.UpdateTask(
                 "user-1", "task 2", newTitle: "", description: "changed", default);
 
-            ShouldBeSuccess(result, "Task updated successfully");
+            ShouldBeSuccess(result, "Done");   
 
             var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
             updated.Title.Should().Be("task 2");
@@ -859,7 +855,7 @@ namespace TaskService.IntegrationTests
             var result = await _tools.UpdateTask(
                 "user-1", "task 2", newTitle: null, description: "", default);
 
-            ShouldBeSuccess(result, "Task updated successfully");
+            ShouldBeSuccess(result, "Done");   
 
             var updated = await _db.Tasks.FirstAsync(t => t.OwnerSubjectId == "user-1", default);
             updated.Description.Should().BeEmpty();
